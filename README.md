@@ -25,16 +25,10 @@ Install using `pip`:
 pip install -e .
 ```
 
-Create a `.env` file with your LLM provider API keys:
-
-```bash
-ANTHROPIC_API_KEY=...
-OPENAI_API_KEY=...
-```
-
 Launch the chat gui:
 
 ```bash
+export OPENAI_API_KEY=...
 python -m textual_guis.chatgui
 ```
 
