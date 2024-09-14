@@ -37,7 +37,6 @@ Launch the chat gui:
 ```bash
 python -m textual_guis.chatgui
 ```
-```
 
 ## Notes
 
