@@ -1,0 +1,46 @@
+LoadingIndicator {
+    height: 1;
+}
+
+#chat-container {
+    layout: grid;
+    grid-rows: 1fr 1 6;
+    height: 100%;
+}
+
+#chat-log-container {
+    align-vertical: bottom;
+}
+
+#text-input {
+    border: $boost;
+}
+
+#separator {
+    height: 1;
+    background: $surface;
+    margin: 0 2;
+}
+
+#separator.hovered {
+    background: $surface-lighten-1;
+}
+
+#separator.moving {
+    background: $background-lighten-2;
+}
+
+/* Styles related to markdown message blocks */
+.message {
+    width: 100%;
+    margin: 0 0;
+    padding: 0 0 0 1;
+/*    border: solid $panel;*/
+    padding-bottom: -1;
+}
+.message > Static {
+    margin-bottom: 1;
+}
+.user-message {
+    border: $surface-lighten-1;
+}
