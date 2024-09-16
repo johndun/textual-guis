@@ -19,7 +19,7 @@ class LlmChat:
     print(chat.usage)
     ```
     """
-    model: str  #: A litellm model identifier: https://docs.litellm.ai/docs/providers (default=bedrock/anthropic.claude-3-sonnet-20240229-v1:0)
+    model: str = "gpt-4o"  #: A litellm model identifier: https://docs.litellm.ai/docs/providers (default=gpt-4o)
     system_prompt: str = ""  #: A system prompt (default: )
     max_tokens: int = 4096  #: The maximum number of tokens to generate (default: 4,096)
     top_p: float = 1.0  #: The cumulative probability for top-p sampling (default: 1.)
@@ -84,7 +84,7 @@ class LlmChat:
                 max_tokens=self.max_tokens
             )
         )
-        response.choices[0].message.content = prefill + response.choices[0].message.content
+        response.choices[0].message.content = prefill + (response.choices[0].message.content or "")
         self.history.append(response.choices[0].message.model_dump())
         self.input_tokens += response.usage.prompt_tokens
         self.output_tokens += response.usage.completion_tokens
@@ -103,7 +103,7 @@ class LlmChat:
                     "content": function_response,
                 })
             if tool_call_depth < self.max_tool_calls:
-                response = tool_chat(tool_call_depth=tool_call_depth + 1)
+                response = self(tool_call_depth=tool_call_depth + 1)
 
         return response
 

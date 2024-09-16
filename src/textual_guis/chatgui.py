@@ -11,6 +11,12 @@ from textual.widgets import (
 from textual.binding import Binding
 
 from litellm import completion
+import typer
+
+from typer import Option
+from typing_extensions import Annotated
+
+from textual_guis.llmchat import LlmChat
 
 
 class TextInput(TextArea):
@@ -132,8 +138,9 @@ class ChatGUI(App):
         Binding("ctrl+r", "", "Submit")
     ]
 
-    def __init__(self, title: str = "LLM Chat"):
+    def __init__(self, chat: LlmChat, title: str = "LLM Chat"):
         super().__init__()
+        self.chat = chat
         self.title = title
 
     def compose(self) -> ComposeResult:
@@ -167,7 +174,9 @@ class ChatGUI(App):
 
     def action_update_display(self) -> None:
         """Called when Ctrl+R is pressed."""
-        input_text = self.query_one("#text-input").text
+        input_widget = self.query_one("#text-input")
+        input_text = input_widget.text
+        input_widget.text = ""
         self.query_one("#loading").display = True
         self.run_worker(self.update_display(input_text))
 
@@ -179,17 +188,25 @@ class ChatGUI(App):
         chat_log.mount(message)
         message.scroll_visible()
 
-        response = await asyncio.to_thread(completion,
-            model="gpt-4o",
-            messages=[{"content": text, "role": "user"}]
-        )
-
+        chat = self.chat
+        response = await asyncio.to_thread(chat, prompt=text)
         message = Message(response.choices[0].message.content, classes="assistant-message")
         chat_log.mount(message)
         self.query_one("#loading").display = False
         message.scroll_visible()
 
 
-if __name__ == "__main__":
-    app = ChatGUI()
+def launch_gui(
+    model: Annotated[str, Option(help="A litellm model identifier")] = "gpt-4o", 
+    max_tokens: Annotated[int, Option(help="The maximum number of tokens to generate")] = 4096,
+    top_p: Annotated[float, Option(help="The cumulative probability for top-p sampling")] = 1.0,
+    temperature: Annotated[float, Option(help="The sampling temperature to use for generation")] = 0.0
+):
+    """Launches a chat gui with a model backend."""
+    chat = LlmChat(model=model, max_tokens=max_tokens, top_p=top_p, temperature=temperature)
+    app = ChatGUI(title=model, chat=chat)
     app.run()
+
+
+if __name__ == "__main__":
+    typer.run(launch_gui)
