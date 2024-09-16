@@ -10,16 +10,17 @@ LoadingIndicator {
 
 #chat-log-container {
     align-vertical: bottom;
+    border: $surface-lighten-2;
 }
 
 #text-input {
-    border: $boost;
+    border: $surface-lighten-2;
 }
 
 #separator {
     height: 1;
     background: $surface;
-    margin: 0 2;
+    margin: 0 1;
 }
 
 #separator.hovered {
@@ -30,17 +31,43 @@ LoadingIndicator {
     background: $background-lighten-2;
 }
 
-/* Styles related to markdown message blocks */
+.message-container {
+    height: auto;
+}
+
 .message {
     width: 100%;
     margin: 0 0;
-    padding: 0 0 0 1;
-/*    border: solid $panel;*/
-    padding-bottom: -1;
+    padding: 0 1;
 }
+
 .message > Static {
-    margin-bottom: 1;
+    padding-bottom: 0;
 }
+
 .user-message {
-    border: $surface-lighten-1;
+
+}
+
+.assistant-message {
+
+}
+
+.copy {
+    height: 1;
+    text-align: right;
+    link-color: transparent;
+    link-color-hover: transparent;
+    padding-right: 1;
+}
+
+.message-container.hovered {
+    background: $surface-lighten-1;
+}
+
+.message-container.hovered > .copy {
+    link-color: $text;
+    link-color-hover: $text;
+    link-background-hover: $surface-lighten-1;
+    link-style-hover: bold underline;
 }

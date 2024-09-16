@@ -1,10 +1,12 @@
 import os
 import asyncio
+import subprocess
 
 from textual.app import App, ComposeResult
 from textual.containers import VerticalScroll, Container
+from textual.geometry import Region
 from textual.widgets import (
-    TextArea, Static, LoadingIndicator, Header, Footer, Markdown
+    TextArea, Static, LoadingIndicator, Header, Footer, Markdown, Button, Label
 )
 from textual.binding import Binding
 
@@ -36,22 +38,6 @@ class TextInput(TextArea):
             self.app.action_update_display()
 
 
-class Separator(Static):
-    """A widget for separating and resizing panels in a container"""
-    def __init__(
-            self,
-            id: str = "separator",
-            **kwargs
-        ):
-        super().__init__(id=id, **kwargs)
-
-    def on_enter(self) -> None:
-        self.add_class("hovered")
-
-    def on_leave(self) -> None:
-        self.remove_class("hovered")
-
-
 class ChatContainer(Container):
     """A container that allows 2 vertically stacked items to be resized"""
     def __init__(self, id: str = "chat-container", **kwargs):
@@ -67,6 +53,7 @@ class ChatContainer(Container):
 
     def on_mount(self) -> None:
         self.separator = self.query_one("#separator")
+        self.query_one("#loading").display = False
 
     def on_mouse_down(self, event) -> None:
         """Initialize panel resizing"""
@@ -91,6 +78,51 @@ class ChatContainer(Container):
                 pass
 
 
+class Separator(Static):
+    """A widget for separating and resizing panels in a container"""
+    def __init__(
+            self,
+            id: str = "separator",
+            **kwargs
+        ):
+        super().__init__(id=id, **kwargs)
+
+    def on_enter(self) -> None:
+        self.add_class("hovered")
+
+    def on_leave(self) -> None:
+        self.remove_class("hovered")
+
+
+class QuietMarkdown(Markdown):
+    def on_leave(self, event) -> None:
+        event.stop()
+
+
+class Message(Container):
+    """A message"""
+    def __init__(self, markdown: str, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.markdown = markdown
+        self.add_class("message-container")
+
+    def compose(self) -> ComposeResult:
+        yield QuietMarkdown(self.markdown, classes="message")
+        copy_button = Static("[@click='app.copy()']copy[/]", classes="copy")
+        yield copy_button
+
+    def on_enter(self, event) -> None:
+        for x in self.app.query(".message-container"):
+            x.remove_class("hovered")
+        self.add_class("hovered")
+
+    def on_mouse_move(self, event) -> None:
+        self.add_class("hovered")
+
+    def on_leave(self, event) -> None:
+        self.remove_class("hovered")
+
+
 class ChatGUI(App):
     """Simple LLM chat GUI"""
 
@@ -109,8 +141,26 @@ class ChatGUI(App):
         yield ChatContainer()
         yield Footer(show_command_palette=False)
 
-    def on_mount(self) -> None:
-        self.query_one("#loading").display = False
+    def action_copy(self) -> None:
+        copy_button = self.query_one(".message-container.hovered > .copy")
+        copy_button.update("copied")
+        copy_button.add_class("copied")
+        hovered = self.query_one(".message-container.hovered")
+        msg = hovered.markdown
+        msg = msg.lstrip("**User**: ")
+        process = subprocess.Popen(
+            'pbcopy',
+            env={'LANG': 'en_US.UTF-8'},
+            stdin=subprocess.PIPE
+        )
+        process.communicate(msg.encode('utf-8'))
+        asyncio.create_task(self.reset_text())
+
+    async def reset_text(self) -> None:
+        await asyncio.sleep(1)
+        copy_button = self.query_one(".copied")
+        copy_button.update("[@click='app.copy()']copy[/]")
+        copy_button.remove_class("copied")
 
     def action_quit(self) -> None:
         self.exit()
@@ -125,9 +175,7 @@ class ChatGUI(App):
         """Update the display with the given text after a delay."""
         chat_log = self.query_one("#chat-log-container")
 
-        message = Markdown("**User**: " + text)
-        message.add_class("message")
-        message.add_class("user-message")
+        message = Message("**User**: " + text, classes="user-message")
         chat_log.mount(message)
         message.scroll_visible()
 
@@ -136,11 +184,9 @@ class ChatGUI(App):
             messages=[{"content": text, "role": "user"}]
         )
 
-        self.query_one("#loading").display = False
-
-        message = Markdown(response.choices[0].message.content)
-        message.add_class("message")
+        message = Message(response.choices[0].message.content, classes="assistant-message")
         chat_log.mount(message)
+        self.query_one("#loading").display = False
         message.scroll_visible()
 
 
