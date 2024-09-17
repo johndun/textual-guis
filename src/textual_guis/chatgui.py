@@ -44,15 +44,6 @@ class TextInput(TextArea):
             self.app.action_update_display()
 
 
-class ButtonContainer(HorizontalScroll):
-    def __init__(self, **kwargs):
-        super().__init__(id="buttons", **kwargs)
-
-    def compose(self) -> ComposeResult:
-        yield Static("[@click='app.update_display()']Submit[/]", classes="submit")
-        yield Static("[@click='app.clear()']Clear[/]", classes="clear")
-
-
 class ChatContainer(Container):
     """A container that allows 2 vertically stacked items to be resized"""
     def __init__(self, id: str = "chat-container", **kwargs):
@@ -65,7 +56,9 @@ class ChatContainer(Container):
             yield LoadingIndicator(id="loading")
         yield Separator()
         yield TextInput()
-        yield ButtonContainer()
+        with HorizontalScroll(id="buttons"):
+            yield Static("[@click='app.update_display()']Submit[/]", classes="submit")
+            yield Static("[@click='app.clear()']Clear[/]", classes="clear")
 
     def action_clear(self) -> None:
         raise Exception
@@ -120,15 +113,17 @@ class QuietMarkdown(Markdown):
 
 class Message(Container):
     """A message"""
-    def __init__(self, markdown: str, *args, **kwargs):
+    def __init__(self, markdown: str, token_counts: str = "", *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.markdown = markdown
+        self.token_counts = token_counts
         self.add_class("message-container")
 
     def compose(self) -> ComposeResult:
         yield QuietMarkdown(self.markdown, classes="message")
-        copy_button = Static("[@click='app.copy()']copy[/]", classes="copy")
-        yield copy_button
+        with HorizontalScroll(classes="message-buttons"):
+            yield Static(self.token_counts, classes="token-counts")
+            yield Static("[@click='app.copy()']copy[/]", classes="copy")
 
     def on_enter(self, event) -> None:
         for x in self.app.query(".message-container"):
@@ -162,7 +157,7 @@ class ChatGUI(App):
         yield Footer(show_command_palette=False)
 
     def action_copy(self) -> None:
-        copy_button = self.query_one(".message-container.hovered > .copy")
+        copy_button = self.query_one(".message-container.hovered > .message-buttons > .copy")
         copy_button.update("copied")
         copy_button.add_class("copied")
         hovered = self.query_one(".message-container.hovered")
@@ -213,7 +208,12 @@ class ChatGUI(App):
 
         chat = self.chat
         response = await asyncio.to_thread(chat, prompt=text)
-        message = Message(response.choices[0].message.content, classes="assistant-message")
+        input_tokens, output_tokens = response.usage.prompt_tokens, response.usage.completion_tokens
+        token_counts = f"in: {input_tokens:,.0f}, out: {output_tokens:,.0f}"
+        message = Message(
+            response.choices[0].message.content, classes="assistant-message", 
+            token_counts=token_counts
+        )
         chat_log.mount(message)
         self.query_one("#loading").display = False
         message.scroll_visible()
