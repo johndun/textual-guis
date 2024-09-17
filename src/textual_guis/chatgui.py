@@ -123,6 +123,9 @@ class Message(Container):
         self.markdown = markdown
         self.add_class("message-container")
 
+    def set_markdown(self, markdown):
+        self.markdown = markdown
+
     def compose(self) -> ComposeResult:
         yield QuietMarkdown(self.markdown, classes="message")
         with HorizontalScroll(classes="message-buttons"):
@@ -236,10 +239,12 @@ class ChatGUI(App):
                     response_text.replace("<", "\\<")
                 )
                 self.call_from_thread(chat_log.scroll_end)
+            response_text = response_text.replace("<", "\\<")
         else:
             response_text = self.chat(prompt=prompt).replace("<", "\\<")
             self.call_from_thread(message_container.update, response_text)
 
+        self.call_from_thread(message.set_markdown, response_text)
         self.call_from_thread(token_count_container.update, self.chat.tokens.last)
         self.query_one("#loading").display = False
 
