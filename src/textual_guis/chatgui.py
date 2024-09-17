@@ -3,6 +3,7 @@ import asyncio
 import subprocess
 import re
 
+from textual.reactive import reactive
 from textual.app import App, ComposeResult
 from textual.containers import VerticalScroll, Container, HorizontalScroll, ScrollableContainer
 from textual.geometry import Region
@@ -10,6 +11,7 @@ from textual.widgets import (
     TextArea, Static, LoadingIndicator, Header, Footer, Markdown
 )
 from textual.binding import Binding
+from textual import work
 
 from litellm import completion
 import typer
@@ -113,11 +115,12 @@ class QuietMarkdown(Markdown):
 
 
 class Message(Container):
+    token_counts: reactive[str | None] = reactive("")
+
     """A message"""
-    def __init__(self, markdown: str, token_counts: str = "", *args, **kwargs):
+    def __init__(self, markdown: str, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.markdown = markdown
-        self.token_counts = token_counts
         self.add_class("message-container")
 
     def compose(self) -> ComposeResult:
@@ -203,34 +206,61 @@ class ChatGUI(App):
         """Update the display with the given text after a delay."""
         chat_log = self.query_one("#chat-log-container")
 
+        # Render the user message
         message = Message("**User**: " + text, classes="user-message")
         chat_log.mount(message)
-        message.scroll_visible()
+        message.anchor()
 
-        chat = self.chat
-        response = await asyncio.to_thread(chat, prompt=text)
-        input_tokens, output_tokens = response.usage.prompt_tokens, response.usage.completion_tokens
-        token_counts = f"in: {input_tokens:,.0f}, out: {output_tokens:,.0f}"
-        # Improve formatting for XML blocks (escape XML tags)
-        response_text = response.choices[0].message.content.replace("<", "\\<")
-        message = Message(
-            response_text, 
-            classes="assistant-message", 
-            token_counts=token_counts
-        )
-        chat_log.mount(message)
+        # Add the next message block to the chat log
+        message = Message("", classes="assistant-message")
+        await chat_log.mount(message)
+        message.anchor()
+
+        # Chat response
+        self.send_prompt(text, message)
+
+    @work(thread=True)
+    def send_prompt(
+            self, 
+            prompt: str, 
+            message
+    ):
+        message_container = message.query_one(".message")
+        token_count_container = message.query_one(".token-counts")
+
+        if self.chat.stream:
+            for response_text in self.chat(prompt=prompt):
+                self.call_from_thread(
+                    message_container.update, 
+                    response_text.replace("<", "\\<")
+                )
+            token_counts = f"in: {self.chat.last_input_tokens:,.0f}, out: {self.chat.last_output_tokens:,.0f}"
+        else:
+            response = self.chat(prompt=prompt)
+            input_tokens, output_tokens = response.usage.prompt_tokens, response.usage.completion_tokens
+            token_counts = f"in: {input_tokens:,.0f}, out: {output_tokens:,.0f}"
+
+            response_text = response.choices[0].message.content.replace("<", "\\<")
+            self.call_from_thread(message_container.update, response_text)
+        self.call_from_thread(token_count_container.update, token_counts)
         self.query_one("#loading").display = False
-        message.scroll_visible()
 
 
 def launch_gui(
-    model: Annotated[str, Option(help="A litellm model identifier")] = "gpt-4o", 
+    model: Annotated[str, Option(help="A litellm model identifier")] = "gpt-4o-mini", 
     max_tokens: Annotated[int, Option(help="The maximum number of tokens to generate")] = 4096,
     top_p: Annotated[float, Option(help="The cumulative probability for top-p sampling")] = 1.0,
-    temperature: Annotated[float, Option(help="The sampling temperature to use for generation")] = 0.0
+    temperature: Annotated[float, Option(help="The sampling temperature to use for generation")] = 0.0,
+    stream: Annotated[bool, Option(help="If true, use streaming API mode")] = False
 ):
     """Launches a chat gui with a model backend."""
-    chat = LlmChat(model=model, max_tokens=max_tokens, top_p=top_p, temperature=temperature)
+    chat = LlmChat(
+        model=model, 
+        max_tokens=max_tokens, 
+        top_p=top_p, 
+        temperature=temperature, 
+        stream=stream
+    )
     app = ChatGUI(title=model, chat=chat)
     app.run()
 
