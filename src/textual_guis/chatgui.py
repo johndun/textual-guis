@@ -55,7 +55,7 @@ class ChatContainer(Container):
 
     def compose(self) -> ComposeResult:
         with Container():
-            yield ScrollableContainer(id="chat-log-container")
+            yield VerticalScroll(id="chat-log-container")
             yield LoadingIndicator(id="loading")
         yield Separator()
         yield TextInput()
@@ -225,6 +225,7 @@ class ChatGUI(App):
             prompt: str, 
             message
     ):
+        chat_log = message.app.query_one("#chat-log-container")
         message_container = message.query_one(".message")
         token_count_container = message.query_one(".token-counts")
 
@@ -234,12 +235,11 @@ class ChatGUI(App):
                     message_container.update, 
                     response_text.replace("<", "\\<")
                 )
+                self.call_from_thread(chat_log.scroll_end)
         else:
-            response = self.chat(prompt=prompt)
-            input_tokens, output_tokens = response.usage.prompt_tokens, response.usage.completion_tokens
-
-            response_text = response.choices[0].message.content.replace("<", "\\<")
+            response_text = self.chat(prompt=prompt).replace("<", "\\<")
             self.call_from_thread(message_container.update, response_text)
+
         self.call_from_thread(token_count_container.update, self.chat.tokens.last)
         self.query_one("#loading").display = False
 

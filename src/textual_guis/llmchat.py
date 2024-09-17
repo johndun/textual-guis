@@ -2,7 +2,7 @@ import json
 from dataclasses import dataclass
 from typing import Dict, List, Callable
 
-from litellm import completion, ModelResponse, get_model_info
+from litellm import completion, ModelResponse, get_model_info, stream_chunk_builder
 from litellm.utils import function_to_dict
 
 
@@ -81,6 +81,22 @@ class LlmChat:
         if self.system_prompt:
             self.history.append({"role": "system", "content": self.system_prompt})
 
+    def get_tool_responses(self, tool_calls):
+        response_text = ""
+        for tool_call in tool_calls:
+            response_text += "\n\n```tool_call\n" + json.dumps(dict(tool_call.function), indent=2) + "\n```"
+            function_name = tool_call.function.name
+            function_to_call = self.tools_map[function_name]
+            function_args = json.loads(tool_call.function.arguments)
+            function_response = function_to_call(**function_args) or ""
+            response_text += "\n\n```tool_response\n" + function_response + "\n```"
+            self.history.append({
+                "tool_call_id": tool_call.id,
+                "role": "tool",
+                "name": function_name,
+                "content": function_response,
+            })
+        return response_text + "\n\n"
 
     def _call(self, prompt: str = "", prefill: str = "", tool_call_depth: int = 0) -> ModelResponse:
         assert not prefill or self.supports_assistant_prefill
@@ -91,47 +107,29 @@ class LlmChat:
             if not prefill else
             self.history + [{"role": "assistant", "content": prefill}]
         )
-        response = (
-            completion(
-                model=self.model,
-                messages=messages,
-                top_p=self.top_p,
-                temperature=self.temperature,
-                tools=self.tool_schemas,
-                max_tokens=self.max_tokens, 
-            )
-            if self.tool_schemas else
-            completion(
-                model=self.model,
-                messages=messages,
-                top_p=self.top_p,
-                temperature=self.temperature,
-                max_tokens=self.max_tokens,
-            )
+        completion_args = {"tools": self.tool_schemas} if self.tool_schemas else {}
+        response = completion(
+            model=self.model,
+            messages=messages,
+            top_p=self.top_p,
+            temperature=self.temperature,
+            max_tokens=self.max_tokens, 
+            **completion_args
         )
-        response.choices[0].message.content = prefill + (response.choices[0].message.content or "")
+        response_text = prefill + (response.choices[0].message.content or "")
+        response.choices[0].message.content = response_text
         self.history.append(response.choices[0].message.model_dump())
         self.tokens.add(response.usage.prompt_tokens, response.usage.completion_tokens)
 
         tool_calls = response.choices[0].message.tool_calls
         if tool_calls:
-            for tool_call in tool_calls:
-                function_name = tool_call.function.name
-                function_to_call = self.tools_map[function_name]
-                function_args = json.loads(tool_call.function.arguments)
-                function_response = function_to_call(**function_args)
-                self.history.append({
-                    "tool_call_id": tool_call.id,
-                    "role": "tool",
-                    "name": function_name,
-                    "content": function_response,
-                })
+            response_text += self.get_tool_responses(tool_calls)
             if tool_call_depth < self.max_tool_calls:
-                response = self(tool_call_depth=tool_call_depth + 1)
+                response_text += self._call(tool_call_depth=tool_call_depth + 1)
 
-        return response
+        return response_text
 
-    def _call_stream(self, prompt: str = "", prefill: str = "") -> ModelResponse:
+    def _call_stream(self, prompt: str = "", prefill: str = "", tool_call_depth: int = 0) -> ModelResponse:
         assert not prefill or self.supports_assistant_prefill
         if prompt:
             self.history.append({"role": "user", "content": prompt})
@@ -140,15 +138,16 @@ class LlmChat:
             if not prefill else
             self.history + [{"role": "assistant", "content": prefill}]
         )
-
+        completion_args = {"tools": self.tool_schemas} if self.tool_schemas else {}
         response = completion(
             model=self.model,
             messages=messages,
             top_p=self.top_p,
             temperature=self.temperature,
-            max_tokens=self.max_tokens,
+            max_tokens=self.max_tokens, 
             stream=True, 
-            stream_options={"include_usage": True}
+            stream_options={"include_usage": True}, 
+            **completion_args
         )
 
         response_text = ""
@@ -156,13 +155,23 @@ class LlmChat:
             chunk_text = chunk.choices[0].delta.content
             if chunk_text:
                 response_text += chunk_text
-            yield response_text
-        self.history.append({"role": "assistant", "content": response_text})
-        self.tokens.add(chunk.usage.prompt_tokens, chunk.usage.completion_tokens)
+                yield response_text
 
-    def __call__(self, prompt: str = "", prefill: str = "", tool_call_depth: int = 0) -> ModelResponse:
+        response = stream_chunk_builder(response.chunks, messages=messages)
+        self.history.append(response.choices[0].message.model_dump())
+        self.tokens.add(response.usage.prompt_tokens, response.usage.completion_tokens)
+        
+        tool_calls = response.choices[0].message.tool_calls
+        if tool_calls:
+            response_text += self.get_tool_responses(tool_calls)
+            yield response_text
+            if tool_call_depth < self.max_tool_calls:
+                for chunk in self._call_stream(tool_call_depth=tool_call_depth + 1):
+                    yield response_text + chunk
+
+    def __call__(self, prompt: str = "", prefill: str = "") -> ModelResponse:
         if not self.stream:
-            return self._call(prompt=prompt, prefill=prefill, tool_call_depth=tool_call_depth)
+            return self._call(prompt=prompt, prefill=prefill)
         else:
             return self._call_stream(prompt=prompt, prefill=prefill)
 
