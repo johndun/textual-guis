@@ -1,6 +1,7 @@
 import os
 import asyncio
 import subprocess
+import re
 
 from textual.app import App, ComposeResult
 from textual.containers import VerticalScroll, Container, HorizontalScroll, ScrollableContainer
@@ -162,7 +163,7 @@ class ChatGUI(App):
         copy_button.add_class("copied")
         hovered = self.query_one(".message-container.hovered")
         msg = hovered.markdown
-        msg = msg.lstrip("**User**: ")
+        msg = msg.lstrip("**User**: ").replace("\\<", "<")
         process = subprocess.Popen(
             'pbcopy',
             env={'LANG': 'en_US.UTF-8'},
@@ -191,7 +192,7 @@ class ChatGUI(App):
     def action_update_display(self) -> None:
         """Called when Ctrl+R is pressed."""
         input_widget = self.query_one("#text-input")
-        input_text = input_widget.text
+        input_text = input_widget.text.replace("<", "\\<")
         if input_text:
             input_widget.text = ""
             self.query_one("#loading").display = True
@@ -210,8 +211,11 @@ class ChatGUI(App):
         response = await asyncio.to_thread(chat, prompt=text)
         input_tokens, output_tokens = response.usage.prompt_tokens, response.usage.completion_tokens
         token_counts = f"in: {input_tokens:,.0f}, out: {output_tokens:,.0f}"
+        # Improve formatting for XML blocks (escape XML tags)
+        response_text = response.choices[0].message.content.replace("<", "\\<")
         message = Message(
-            response.choices[0].message.content, classes="assistant-message", 
+            response_text, 
+            classes="assistant-message", 
             token_counts=token_counts
         )
         chat_log.mount(message)
