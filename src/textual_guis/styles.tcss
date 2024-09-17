@@ -4,13 +4,14 @@ LoadingIndicator {
 
 #chat-container {
     layout: grid;
-    grid-rows: 1fr 1 6;
+    grid-rows: 1fr 1 6 2;
     height: 100%;
 }
 
 #chat-log-container {
     align-vertical: bottom;
-    border: $surface-lighten-2;
+    padding: 0 1
+/*    border: $surface-lighten-2;*/
 }
 
 #text-input {
@@ -38,15 +39,18 @@ LoadingIndicator {
 .message {
     width: 100%;
     margin: 0 0;
-    padding: 0 1;
+    padding: 0 0;
 }
 
 .message > Static {
+    margin: 0 1;
+    margin-bottom: 1;
     padding-bottom: 0;
 }
 
 .user-message {
-
+/*    border-left: thick $surface-lighten-3;*/
+    background: $surface-lighten-1;
 }
 
 .assistant-message {
@@ -62,12 +66,29 @@ LoadingIndicator {
 }
 
 .message-container.hovered {
-    background: $surface-lighten-1;
+/*    background: $surface-lighten-1;*/
 }
 
 .message-container.hovered > .copy {
     link-color: $text;
     link-color-hover: $text;
-    link-background-hover: $surface-lighten-1;
+    link-background-hover: $surface-lighten-3;
+    link-style-hover: bold underline;
+}
+
+#buttons {
+    width: 100%;
+    height: 2;
+    align-horizontal: right;
+}
+
+#buttons > Static {
+    width: 10;
+    text-align: center;
+    margin: 0 1;
+    padding: 0 1;
+    link-color: $text;
+    link-color-hover: $text;
+    link-background-hover: $surface-lighten-3;
     link-style-hover: bold underline;
 }

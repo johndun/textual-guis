@@ -3,10 +3,10 @@ import asyncio
 import subprocess
 
 from textual.app import App, ComposeResult
-from textual.containers import VerticalScroll, Container
+from textual.containers import VerticalScroll, Container, HorizontalScroll, ScrollableContainer
 from textual.geometry import Region
 from textual.widgets import (
-    TextArea, Static, LoadingIndicator, Header, Footer, Markdown, Button, Label
+    TextArea, Static, LoadingIndicator, Header, Footer, Markdown
 )
 from textual.binding import Binding
 
@@ -44,6 +44,15 @@ class TextInput(TextArea):
             self.app.action_update_display()
 
 
+class ButtonContainer(HorizontalScroll):
+    def __init__(self, **kwargs):
+        super().__init__(id="buttons", **kwargs)
+
+    def compose(self) -> ComposeResult:
+        yield Static("[@click='app.update_display()']Submit[/]", classes="submit")
+        yield Static("[@click='app.clear()']Clear[/]", classes="clear")
+
+
 class ChatContainer(Container):
     """A container that allows 2 vertically stacked items to be resized"""
     def __init__(self, id: str = "chat-container", **kwargs):
@@ -52,10 +61,14 @@ class ChatContainer(Container):
 
     def compose(self) -> ComposeResult:
         with Container():
-            yield VerticalScroll(id="chat-log-container")
+            yield ScrollableContainer(id="chat-log-container")
             yield LoadingIndicator(id="loading")
         yield Separator()
         yield TextInput()
+        yield ButtonContainer()
+
+    def action_clear(self) -> None:
+        raise Exception
 
     def on_mount(self) -> None:
         self.separator = self.query_one("#separator")
@@ -76,7 +89,7 @@ class ChatContainer(Container):
         """Resize panels"""
         if self.separator.has_class("moving"):
             try:
-                top_height = max(1, min(event.y, self.size.height - 4))
+                top_height = max(1, min(event.y, self.size.height - 6))
                 bottom_height = self.size.height - top_height - 1
                 self.styles.grid_rows = f"{top_height + 2}fr 1 {bottom_height}fr"
                 self.refresh()
@@ -172,13 +185,23 @@ class ChatGUI(App):
     def action_quit(self) -> None:
         self.exit()
 
+    def action_clear(self) -> None:
+        chat_log = self.query_one("#chat-log-container")
+        chat_log.remove_children()
+        self.chat.clear_history()
+        input_widget = self.query_one("#text-input")
+        input_widget.text = ""
+        input_widget.focus()
+
     def action_update_display(self) -> None:
         """Called when Ctrl+R is pressed."""
         input_widget = self.query_one("#text-input")
         input_text = input_widget.text
-        input_widget.text = ""
-        self.query_one("#loading").display = True
-        self.run_worker(self.update_display(input_text))
+        if input_text:
+            input_widget.text = ""
+            self.query_one("#loading").display = True
+            self.run_worker(self.update_display(input_text))
+        input_widget.focus()
 
     async def update_display(self, text: str) -> None:
         """Update the display with the given text after a delay."""
