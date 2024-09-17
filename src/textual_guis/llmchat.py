@@ -7,6 +7,31 @@ from litellm.utils import function_to_dict
 
 
 @dataclass
+class Tokens:
+    """Counts tokens"""
+    last_input_tokens: int = 0
+    last_output_tokens: int = 0
+    input_tokens: int = 0
+    output_tokens: int = 0
+
+    def add(self, input_tokens, output_tokens):
+        self.last_input_tokens = input_tokens
+        self.input_tokens += input_tokens
+        self.last_output_tokens = output_tokens
+        self.output_tokens += output_tokens
+
+    @property
+    def last(self):
+        """Returns formatted string containing last message token counts"""
+        return f"in: {self.last_input_tokens:,.0f}, out: {self.last_output_tokens:,.0f}"
+
+    @property
+    def total(self):
+        """Returns formatted string containing total token counts"""
+        return f"in: {self.input_tokens:,.0f}, out: {self.output_tokens:,.0f}"
+
+
+@dataclass
 class LlmChat:
     """A class for facilitating a multi-turn chat with an LLM
 
@@ -31,10 +56,7 @@ class LlmChat:
     def __post_init__(self):
         self.history = []
         self.clear_history()
-        self.input_tokens = 0
-        self.output_tokens = 0
-        self.last_input_tokens = 0
-        self.last_output_tokens = 0
+        self.tokens = Tokens()
         self.tool_schemas = []
         model_info = get_model_info(model=self.model)
         self.supports_assistant_prefill = model_info["supports_assistant_prefill"]
@@ -89,10 +111,7 @@ class LlmChat:
         )
         response.choices[0].message.content = prefill + (response.choices[0].message.content or "")
         self.history.append(response.choices[0].message.model_dump())
-        self.last_input_tokens = response.usage.prompt_tokens
-        self.input_tokens += response.usage.prompt_tokens
-        self.last_output_tokens = response.usage.completion_tokens
-        self.output_tokens += response.usage.completion_tokens
+        self.tokens.add(response.usage.prompt_tokens, response.usage.completion_tokens)
 
         tool_calls = response.choices[0].message.tool_calls
         if tool_calls:
@@ -139,20 +158,13 @@ class LlmChat:
                 response_text += chunk_text
             yield response_text
         self.history.append({"role": "assistant", "content": response_text})
-        self.last_input_tokens = chunk.usage.prompt_tokens
-        self.input_tokens += chunk.usage.prompt_tokens
-        self.last_output_tokens = chunk.usage.completion_tokens
-        self.output_tokens += chunk.usage.completion_tokens
-
-        
-        
+        self.tokens.add(chunk.usage.prompt_tokens, chunk.usage.completion_tokens)
 
     def __call__(self, prompt: str = "", prefill: str = "", tool_call_depth: int = 0) -> ModelResponse:
         if not self.stream:
             return self._call(prompt=prompt, prefill=prefill, tool_call_depth=tool_call_depth)
         else:
             return self._call_stream(prompt=prompt, prefill=prefill)
-
 
     @property
     def usage(self) -> Dict:

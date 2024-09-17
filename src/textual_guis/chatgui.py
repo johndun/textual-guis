@@ -234,15 +234,13 @@ class ChatGUI(App):
                     message_container.update, 
                     response_text.replace("<", "\\<")
                 )
-            token_counts = f"in: {self.chat.last_input_tokens:,.0f}, out: {self.chat.last_output_tokens:,.0f}"
         else:
             response = self.chat(prompt=prompt)
             input_tokens, output_tokens = response.usage.prompt_tokens, response.usage.completion_tokens
-            token_counts = f"in: {input_tokens:,.0f}, out: {output_tokens:,.0f}"
 
             response_text = response.choices[0].message.content.replace("<", "\\<")
             self.call_from_thread(message_container.update, response_text)
-        self.call_from_thread(token_count_container.update, token_counts)
+        self.call_from_thread(token_count_container.update, self.chat.tokens.last)
         self.query_one("#loading").display = False
 
 
