@@ -91,7 +91,7 @@ class ChatContainer(Container):
             try:
                 top_height = max(1, min(event.y, self.size.height - 6))
                 bottom_height = self.size.height - top_height - 1
-                self.styles.grid_rows = f"{top_height + 2}fr 1 {bottom_height}fr"
+                self.styles.grid_rows = f"{top_height + 2}fr 1 {bottom_height}fr 2"
                 self.refresh()
             except NoMatches:
                 pass
