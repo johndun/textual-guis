@@ -233,13 +233,11 @@ class ChatGUI(App):
         token_count_container = message.query_one(".token-counts")
 
         if self.chat.stream:
-            for response_text in self.chat(prompt=prompt):
-                self.call_from_thread(
-                    message_container.update, 
-                    response_text.replace("<", "\\<")
-                )
-                self.call_from_thread(chat_log.scroll_end)
-            response_text = response_text.replace("<", "\\<")
+            for idx, chunk in enumerate(self.chat(prompt=prompt)):
+                if idx % 10 == 0:
+                    self.call_from_thread(message_container.update, chunk)
+                    self.call_from_thread(chat_log.scroll_end)
+            response_text = chunk.replace("<", "\\<")
         else:
             response_text = self.chat(prompt=prompt).replace("<", "\\<")
             self.call_from_thread(message_container.update, response_text)
