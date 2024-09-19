@@ -1,9 +1,13 @@
 import json
 from dataclasses import dataclass
-from typing import Dict, List, Callable
+from typing import Dict, List, Callable, Union, Generator
+
+from datasets import Dataset
 
 from litellm import completion, ModelResponse, get_model_info, stream_chunk_builder
 from litellm.utils import function_to_dict
+
+from textual_guis.utils import Template
 
 
 @dataclass
@@ -39,18 +43,18 @@ class LlmChat:
 
     ```
     chat = LlmChat(system_prompt="Talk like a pirate")
-    print(chat("Hello", prefill="This be").content[0].text)
-    print(chat("How are you").content[0].text)
-    print(chat.usage)
+    print(chat("Hello"))
+    print(chat("How are you"))
+    print(chat.tokens.total)
     ```
     """
-    model: str = "gpt-4o-mini"  #: A litellm model identifier: https://docs.litellm.ai/docs/providers (default=gpt-4o)
+    model: str = "gpt-4o-mini"  #: A litellm model identifier: https://docs.litellm.ai/docs/providers
     system_prompt: str = ""  #: A system prompt (default: )
     max_tokens: int = 4096  #: The maximum number of tokens to generate (default: 4,096)
     top_p: float = 1.0  #: The cumulative probability for top-p sampling (default: 1.)
     temperature: float = 0.0  #: The sampling temperature to use for generation (default: 0.)
     tools: List[Callable] = None  #: An optional list of tools as python functions (default: None)
-    max_tool_calls: int = 5  #: The maximum number of sequential tool calls (default: 5)
+    max_tool_calls: int = 6  #: The maximum number of sequential tool calls (default: 6)
     stream: bool = False  #: If true, use streaming API mode
 
     def __post_init__(self):
@@ -117,7 +121,7 @@ class LlmChat:
             messages=messages,
             top_p=self.top_p,
             temperature=self.temperature,
-            max_tokens=self.max_tokens, 
+            max_tokens=self.max_tokens,
             **completion_args
         )
         response_text = prefill + (response.choices[0].message.content or "")
@@ -141,13 +145,13 @@ class LlmChat:
             messages=messages,
             top_p=self.top_p,
             temperature=self.temperature,
-            max_tokens=self.max_tokens, 
-            stream=True, 
-            stream_options={"include_usage": True}, 
+            max_tokens=self.max_tokens,
+            stream=True,
+            stream_options={"include_usage": True},
             **completion_args
         )
 
-        response_text = ""
+        response_text = prefill
         for chunk in response:
             chunk_text = chunk.choices[0].delta.content
             if chunk_text:
@@ -157,7 +161,7 @@ class LlmChat:
         response = stream_chunk_builder(response.chunks, messages=messages)
         self.history.append(response.choices[0].message.model_dump())
         self.tokens.add(response.usage.prompt_tokens, response.usage.completion_tokens)
-        
+
         tool_calls = response.choices[0].message.tool_calls
         if tool_calls:
             response_text += self.get_tool_responses(tool_calls)
@@ -166,13 +170,89 @@ class LlmChat:
                 for chunk in self._call_stream(tool_call_depth=tool_call_depth + 1):
                     yield response_text + chunk
 
-    def __call__(self, prompt: str = "", prefill: str = "") -> ModelResponse:
+    def __call__(self, prompt: str = "", prefill: str = "") -> Union[str, Generator]:
         if not self.stream:
             return self._call(prompt=prompt, prefill=prefill)
         else:
             return self._call_stream(prompt=prompt, prefill=prefill)
 
-    @property
-    def usage(self) -> Dict:
-        """Returns a dict with `input_tokens` and `output_tokens` used"""
-        return {"input_tokens": self.input_tokens, "output_tokens": self.output_tokens}
+
+@dataclass
+class LlmPrompt(LlmChat):
+    """A class for prompting an LLM with a prompt template
+
+    ### Usage
+
+    ```
+    chat = LlmPrompt(system_prompt="Talk like a pirate")
+    print(chat(prompt="Hello"))
+    print(chat(prompt="How are you"))
+    print(chat.tokens.total)
+    ```
+    """
+    prompt: str = "{{prompt}}"  #: A string template with keys marked by double curly braces.
+
+    def __call__(self, prefill="", **kwargs) -> Union[str, Generator]:
+        return self._call(prompt=Template(self.prompt).format(**kwargs), prefill=prefill)
+
+
+def batch_inference(
+        prompt: str,
+        dataset: Dataset,
+        num_proc: int = 1,
+        prefill: str = "",
+        **kwargs
+) -> Dataset:
+    """Batch inference given a dataset and a prompt.
+
+    ### Usage
+
+    ```
+    topics = ["space", "cats", "gardening", "unicorns"]
+    dataset = Dataset.from_list([{"topic": topic} for topic in topics])
+    dataset = batch_inference(
+        system_prompt="Talk like a pirate",
+        prompt="Write a haiku, enclosed in <haiku> tags about {{topic}}",
+        dataset=dataset,
+        client="bedrock",
+        model="sonnet",
+        num_proc=4
+    )
+    print(dataset[0])
+    ```
+
+    ### Args
+
+    `prompt: str`
+    :   A string template with keys marked by double curly braces.
+
+    `dataset: Dataset`
+    :   A dataset with fields corresponding to keys in `prompt`.
+
+    `num_proc: int`
+    :   The number of processes to use (default: 1)
+
+    `prefill: str`
+    :   A prefill string for the LLM response (default: )
+
+    ### Returns
+
+    `dataset` with new fields: `response`, `input_tokens`, and `output_tokens`. If the LLM API call
+    fails for any reason, `response` will be empty.
+    """
+
+    def call_api(sample):
+        chat = LlmPrompt(prompt=prompt, **kwargs)
+        try:
+            sample["response"] = chat(**sample)
+            sample["input_tokens"] = chat.tokens.input_tokens
+            sample["output_tokens"] = chat.tokens.output_tokens
+        except Exception as e:
+            print(e)
+            sample["response"] = ""
+            sample["input_tokens"] = 0
+            sample["output_tokens"] = 0
+        return sample
+
+    dataset = dataset.map(call_api, num_proc=num_proc, batched=False)
+    return dataset
