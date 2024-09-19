@@ -1,17 +1,14 @@
-import os
 import asyncio
 import subprocess
-import re
 
-from textual.reactive import reactive
 from textual.app import App, ComposeResult
 from textual.containers import VerticalScroll, Container, HorizontalScroll, ScrollableContainer
-from textual.geometry import Region
 from textual.widgets import (
-    TextArea, Static, LoadingIndicator, Header, Footer, Markdown
+    Static, Header, Footer, Markdown, 
+    TabbedContent, TabPane, Select, TextArea
 )
 from textual.binding import Binding
-from textual import work
+from textual import work, on
 
 from litellm import completion
 import typer
@@ -20,128 +17,16 @@ from typer import Option
 from typing_extensions import Annotated
 
 from textual_guis.llmchat import LlmChat
+from textual_guis.chatcontainer import ChatContainer, Message
 
 
-class TextInput(TextArea):
-    """A text input widget"""
-    def __init__(
-            self, 
-            show_line_numbers: bool = False,
-            language: str = "markdown", 
-            id: str = "text-input", 
-            **kwargs
-    ):
-        super().__init__(
-            id=id, 
-            show_line_numbers=show_line_numbers,
-            language=language,
-            **kwargs
-        )
-
-    def on_mount(self) -> None:
-        self.focus()
-
-    def _on_key(self, event) -> None:
-        if event.key in("ctrl+r", "registered_sign") and self.text:
-            event.prevent_default()
-            self.app.action_update_display()
-
-
-class ChatContainer(Container):
-    """A container that allows 2 vertically stacked items to be resized"""
-    def __init__(self, id: str = "chat-container", **kwargs):
-        super().__init__(id=id, **kwargs)
-        self.separator = None
-
-    def compose(self) -> ComposeResult:
-        with Container():
-            yield VerticalScroll(id="chat-log-container")
-            yield LoadingIndicator(id="loading")
-        yield Separator()
-        yield TextInput()
-        with HorizontalScroll(id="buttons"):
-            yield Static("[@click='app.update_display()']Submit[/]", classes="submit")
-            yield Static("[@click='app.clear()']Clear[/]", classes="clear")
-
-    def action_clear(self) -> None:
-        raise Exception
-
-    def on_mount(self) -> None:
-        self.separator = self.query_one("#separator")
-        self.query_one("#loading").display = False
-
-    def on_mouse_down(self, event) -> None:
-        """Initialize panel resizing"""
-        if self.separator.has_class("hovered"):
-            self.separator.add_class("moving")
-            self.capture_mouse()
-
-    def on_mouse_up(self, event) -> None:
-        """End panel resizing"""
-        self.separator.remove_class("moving")
-        self.release_mouse()
-
-    def on_mouse_move(self, event) -> None:
-        """Resize panels"""
-        if self.separator.has_class("moving"):
-            try:
-                top_height = max(1, min(event.y, self.size.height - 6))
-                bottom_height = self.size.height - top_height - 1
-                self.styles.grid_rows = f"{top_height + 2}fr 1 {bottom_height}fr 2"
-                self.refresh()
-            except NoMatches:
-                pass
-
-
-class Separator(Static):
-    """A widget for separating and resizing panels in a container"""
-    def __init__(
-            self,
-            id: str = "separator",
-            **kwargs
-        ):
-        super().__init__(id=id, **kwargs)
-
-    def on_enter(self) -> None:
-        self.add_class("hovered")
-
-    def on_leave(self) -> None:
-        self.remove_class("hovered")
-
-
-class QuietMarkdown(Markdown):
-    def on_leave(self, event) -> None:
-        event.stop()
-
-
-class Message(Container):
-    token_counts: reactive[str | None] = reactive("")
-
-    """A message"""
-    def __init__(self, markdown: str, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.markdown = markdown
-        self.add_class("message-container")
-
-    def set_markdown(self, markdown):
-        self.markdown = markdown
-
-    def compose(self) -> ComposeResult:
-        yield QuietMarkdown(self.markdown, classes="message")
-        with HorizontalScroll(classes="message-buttons"):
-            yield Static(self.token_counts, classes="token-counts")
-            yield Static("[@click='app.copy()']copy[/]", classes="copy")
-
-    def on_enter(self, event) -> None:
-        for x in self.app.query(".message-container"):
-            x.remove_class("hovered")
-        self.add_class("hovered")
-
-    def on_mouse_move(self, event) -> None:
-        self.add_class("hovered")
-
-    def on_leave(self, event) -> None:
-        self.remove_class("hovered")
+TEMPERATURES = [0.0, 0.1, 0.3, 0.7, 1.0]
+TOP_P = [0.5, 0.9, 0.99, 1.0]
+MODELS = [
+    "gpt-4o", 
+    "gpt-4o-mini", 
+    "claude-3-5-sonnet-20240620"
+]
 
 
 class ChatGUI(App):
@@ -160,8 +45,40 @@ class ChatGUI(App):
 
     def compose(self) -> ComposeResult:
         yield Header()
-        yield ChatContainer()
+        with TabbedContent():
+            with TabPane("Config"):
+                with Container(classes="inputs-container"):
+                    with VerticalScroll():
+                        yield Static("Model")
+                        yield Select.from_values(MODELS, id="model-selector")
+                    with VerticalScroll():
+                        yield Static("Temp")
+                        yield Select.from_values(TEMPERATURES, id="temp-selector")
+                    with VerticalScroll():
+                        yield Static("Top-P")
+                        yield Select.from_values(TOP_P, id="top_p-selector")
+                with Container(classes="system-prompt-container"):
+                    yield Static("System Prompt:")
+                    yield TextArea(id="system-prompt-input")
+            with TabPane("Chat"):
+                yield ChatContainer()
         yield Footer(show_command_palette=False)
+
+    @on(Select.Changed, "#model-selector,#temp-selector,#top_p-selector")
+    def select_changed(self, event: Select.Changed) -> None:
+        assert event.select.id is not None
+        if event.select.id == "model-selector":
+            self.chat.model = event.value
+        elif event.select.id == "temp-selector":
+            self.chat.temperature = event.value
+        elif event.select.id == "top_p-selector":
+            self.chat.top_p = event.value
+
+    @on(TextArea.Changed, "#system-prompt-input")
+    def text_area_changed(self, event: TextArea.Changed) -> None:
+        assert event.text_area.id is not None
+        if event.text_area.id == "system-prompt-input":
+            self.chat.system_prompt = event.text_area.text
 
     def action_copy(self) -> None:
         copy_button = self.query_one(".message-container.hovered > .message-buttons > .copy")
@@ -178,7 +95,7 @@ class ChatGUI(App):
         process.communicate(msg.encode('utf-8'))
         asyncio.create_task(self.reset_text())
 
-    async def reset_text(self) -> None:
+    async def reset_text(self)   -> None:
         await asyncio.sleep(1)
         copy_button = self.query_one(".copied")
         copy_button.update("[@click='app.copy()']copy[/]")
@@ -244,10 +161,9 @@ class ChatGUI(App):
         else:
             response_text = self.chat(prompt=prompt).replace("<", "\\<")
             self.call_from_thread(message_container.update, response_text)
-
+        self.query_one("#loading").display = False
         self.call_from_thread(message.set_markdown, response_text)
         self.call_from_thread(token_count_container.update, self.chat.tokens.last)
-        self.query_one("#loading").display = False
 
 
 def launch_gui(

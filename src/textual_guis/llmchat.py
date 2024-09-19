@@ -78,8 +78,6 @@ class LlmChat:
     def clear_history(self):
         """Clears and re initializes the history"""
         self.history = []
-        if self.system_prompt:
-            self.history.append({"role": "system", "content": self.system_prompt})
 
     def get_tool_responses(self, tool_calls):
         response_text = ""
@@ -98,7 +96,7 @@ class LlmChat:
             })
         return response_text + "\n\n"
 
-    def _call(self, prompt: str = "", prefill: str = "", tool_call_depth: int = 0) -> ModelResponse:
+    def get_messages_for_completion(self, prompt: str, prefill: str) -> List[Dict]:
         assert not prefill or self.supports_assistant_prefill
         if prompt:
             self.history.append({"role": "user", "content": prompt})
@@ -107,6 +105,12 @@ class LlmChat:
             if not prefill else
             self.history + [{"role": "assistant", "content": prefill}]
         )
+        if self.system_prompt:
+            messages = [{"role": "system", "content": self.system_prompt}] + messages
+        return messages
+
+    def _call(self, prompt: str = "", prefill: str = "", tool_call_depth: int = 0) -> ModelResponse:
+        messages = self.get_messages_for_completion(prompt, prefill)
         completion_args = {"tools": self.tool_schemas} if self.tool_schemas else {}
         response = completion(
             model=self.model,
@@ -130,14 +134,7 @@ class LlmChat:
         return response_text
 
     def _call_stream(self, prompt: str = "", prefill: str = "", tool_call_depth: int = 0) -> ModelResponse:
-        assert not prefill or self.supports_assistant_prefill
-        if prompt:
-            self.history.append({"role": "user", "content": prompt})
-        messages = (
-            self.history
-            if not prefill else
-            self.history + [{"role": "assistant", "content": prefill}]
-        )
+        messages = self.get_messages_for_completion(prompt, prefill)
         completion_args = {"tools": self.tool_schemas} if self.tool_schemas else {}
         response = completion(
             model=self.model,
