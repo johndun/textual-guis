@@ -5,8 +5,8 @@ import json
 import typer
 from typer import Option
 
-from .llmchat import LlmChat
-from .chatgui import ChatGUI
+from textual_guis.llmchat import LlmChat
+from textual_guis.chatgui import ChatGUI
 
 
 def get_weather(location: str):

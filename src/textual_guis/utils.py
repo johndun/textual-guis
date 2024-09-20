@@ -33,7 +33,7 @@ class XmlBlock:
         return f"<{self.tag}>{self.content}</{self.tag}>"
 
 
-def parse_text_for_all_tags(text: str) -> List[XmlBlock]:
+def parse_text_for_tags(text: str) -> List[XmlBlock]:
     """Extracts the text within all the outermost XML/HTML tags.
 
     Args:
@@ -42,25 +42,9 @@ def parse_text_for_all_tags(text: str) -> List[XmlBlock]:
     Returns:
         List[XmlBlock]: A list of XmlBlock objects, each containing the tag name and the content inside the tag block
     """
-    # This pattern matches any XML tag, capturing the tag name
-    pattern = r"<(/?)(\w+)(?:\s+[^>]*)?>"
-    outermost_blocks = []
-    stack = []
-
-    for match in re.finditer(pattern, text, re.DOTALL):
-        is_closing, tag_name = match.groups()
-
-        if not is_closing:
-            stack.append((tag_name, match.start()))
-        elif stack and stack[-1][0] == tag_name:
-            start_tag, start_index = stack.pop()
-            if not stack:
-                # We found a complete outermost tag block
-                opening_tag_end = text.find('>', start_index) + 1
-                content = text[opening_tag_end:match.start()]
-                outermost_blocks.append(XmlBlock(start_tag, content))
-
-    return outermost_blocks
+    pattern = r'<([^<>]+)>((?:(?!</?\1>)[\s\S])*)</\1>'
+    matches = re.finditer(pattern, text, re.DOTALL)
+    return [XmlBlock(match.group(1), match.group(2)) for match in matches]
 
 
 def parse_text_for_tag(
@@ -76,4 +60,4 @@ def parse_text_for_tag(
     Returns:
         List[str]: A list of strings, each representing the content inside a tag block
     """
-    return [x.content for x in parse_text_for_all_tags(text) if x.tag == tag]
+    return [x.content for x in parse_text_for_tags(text) if x.tag == tag]

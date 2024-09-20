@@ -1,5 +1,5 @@
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from typing import Dict, List, Callable, Union, Generator
 
 from datasets import Dataset
@@ -7,7 +7,7 @@ from datasets import Dataset
 from litellm import completion, ModelResponse, get_model_info, stream_chunk_builder
 from litellm.utils import function_to_dict
 
-from textual_guis.utils import Template
+from textual_guis.utils import Template, parse_text_for_tags
 
 
 @dataclass
@@ -62,6 +62,7 @@ class LlmChat:
         self.clear_history()
         self.tokens = Tokens()
         self.tool_schemas = []
+        self.data = []
         model_info = get_model_info(model=self.model)
         self.supports_assistant_prefill = model_info["supports_assistant_prefill"]
         self.supports_function_calling = model_info["supports_function_calling"]
@@ -90,7 +91,10 @@ class LlmChat:
             function_name = tool_call.function.name
             function_to_call = self.tools_map[function_name]
             function_args = json.loads(tool_call.function.arguments)
+            for key, value in self.data:
+                function_args[key] = value
             function_response = function_to_call(**function_args) or ""
+            self.data.extend([(x.tag, x.content) for x in parse_text_for_tags(function_response)])
             response_text += "\n\n```tool_response\n" + function_response + "\n```"
             self.history.append({
                 "tool_call_id": tool_call.id,
@@ -127,6 +131,7 @@ class LlmChat:
         response_text = prefill + (response.choices[0].message.content or "")
         response.choices[0].message.content = response_text
         self.history.append(response.choices[0].message.model_dump())
+        self.data.extend([(x.tag, x.content) for x in parse_text_for_tags(response_text)])
         self.tokens.add(response.usage.prompt_tokens, response.usage.completion_tokens)
 
         tool_calls = response.choices[0].message.tool_calls
@@ -160,6 +165,7 @@ class LlmChat:
 
         response = stream_chunk_builder(response.chunks, messages=messages)
         self.history.append(response.choices[0].message.model_dump())
+        self.data.extend([(x.tag, x.content) for x in parse_text_for_tags(response_text)])
         self.tokens.add(response.usage.prompt_tokens, response.usage.completion_tokens)
 
         tool_calls = response.choices[0].message.tool_calls
@@ -171,6 +177,7 @@ class LlmChat:
                     yield response_text + chunk
 
     def __call__(self, prompt: str = "", prefill: str = "") -> Union[str, Generator]:
+        self.data.extend([(x.tag, x.content) for x in parse_text_for_tags(prompt)])
         if not self.stream:
             return self._call(prompt=prompt, prefill=prefill)
         else:

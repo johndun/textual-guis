@@ -1,5 +1,6 @@
 import asyncio
 import subprocess
+import re
 
 from textual.app import App, ComposeResult
 from textual.containers import VerticalScroll, Container, HorizontalScroll, ScrollableContainer
@@ -27,6 +28,24 @@ MODELS = [
     "gpt-4o-mini", 
     "claude-3-5-sonnet-20240620"
 ]
+
+
+def escape_text(markdown_text):
+    # Function to escape XML tags
+    def escape(match):
+        return '\\' + match.group(0)
+
+    # Split the text into code and non-code parts
+    parts = re.split(r'(```[\s\S]*?```)', markdown_text)
+
+    # Process each part
+    for i in range(len(parts)):
+        if i % 2 == 0:  # Non-code part
+            # Escape XML tags
+            parts[i] = re.sub(r'<[^>]*>', escape, parts[i])
+
+    # Join all parts back together
+    return ''.join(parts)
 
 
 class ChatGUI(App):
@@ -115,7 +134,7 @@ class ChatGUI(App):
     def action_update_display(self) -> None:
         """Called when Ctrl+R is pressed."""
         input_widget = self.query_one("#text-input")
-        input_text = input_widget.text.replace("<", "\\<")
+        input_text = escape_text(input_widget.text)
         if input_text:
             input_widget.text = ""
             self.query_one("#loading").display = True
@@ -151,7 +170,7 @@ class ChatGUI(App):
 
         if self.chat.stream:
             for idx, chunk in enumerate(self.chat(prompt=prompt)):
-                chunk = chunk.replace("<", "\\<")
+                chunk = escape_text(chunk)
                 if idx % 10 == 0:
                     self.call_from_thread(message_container.update, chunk)
                     self.call_from_thread(chat_log.scroll_end)
@@ -159,7 +178,7 @@ class ChatGUI(App):
             self.call_from_thread(chat_log.scroll_end)
             response_text = chunk
         else:
-            response_text = self.chat(prompt=prompt).replace("<", "\\<")
+            response_text = escape_text(self.chat(prompt=prompt))
             self.call_from_thread(message_container.update, response_text)
         self.query_one("#loading").display = False
         self.call_from_thread(message.set_markdown, response_text)
