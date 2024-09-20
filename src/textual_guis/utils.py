@@ -42,6 +42,8 @@ def parse_text_for_tags(text: str) -> List[XmlBlock]:
     Returns:
         List[XmlBlock]: A list of XmlBlock objects, each containing the tag name and the content inside the tag block
     """
+    if not text:
+        return []
     pattern = r'<([^<>]+)>((?:(?!</?\1>)[\s\S])*)</\1>'
     matches = re.finditer(pattern, text, re.DOTALL)
     return [XmlBlock(match.group(1), match.group(2)) for match in matches]

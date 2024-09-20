@@ -78,7 +78,8 @@ def launch_gui(
         top_p=top_p, 
         temperature=temperature, 
         stream=stream, 
-        tools=[execute_prompt]
+        tools=[execute_prompt], 
+        provide_xml_blocks_to_tools=True
     )
     chat.tools_map = {"execute_prompt": _execute_prompt}
     app = ChatGUI(title=model, chat=chat)
