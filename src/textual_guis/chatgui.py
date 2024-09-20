@@ -1,12 +1,13 @@
 import asyncio
 import subprocess
+import json
 import re
 
 from textual.app import App, ComposeResult
 from textual.containers import VerticalScroll, Container, HorizontalScroll, ScrollableContainer
 from textual.widgets import (
     Static, Header, Footer, Markdown, 
-    TabbedContent, TabPane, Select, TextArea
+    TabbedContent, TabPane, Select, TextArea, Input
 )
 from textual.binding import Binding
 from textual import work, on
@@ -28,6 +29,7 @@ MODELS = [
     "gpt-4o-mini", 
     "claude-3-5-sonnet-20240620"
 ]
+SAVE_DATA_PATH = "chatlog.json"
 
 
 def escape_text(markdown_text):
@@ -54,13 +56,20 @@ class ChatGUI(App):
     CSS_PATH = "styles.tcss"
     BINDINGS = [
         Binding("ctrl+q", "quit", "Quit"),
-        Binding("ctrl+r", "", "Submit")
+        Binding("ctrl+r", "", "Submit"),
+        Binding("ctrl+s", "save", "Save")
     ]
 
-    def __init__(self, chat: LlmChat, title: str = "LLM Chat"):
+    def __init__(
+            self, 
+            chat: LlmChat, 
+            title: str = "LLM Chat", 
+            save_file: str = SAVE_DATA_PATH
+    ):
         super().__init__()
         self.chat = chat
         self.title = title
+        self.save_file = save_file
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -76,14 +85,17 @@ class ChatGUI(App):
                     with VerticalScroll():
                         yield Static("Top-P")
                         yield Select.from_values(TOP_P, id="top_p-selector")
-                with Container(classes="system-prompt-container"):
+                with Container(classes="config-text-inputs-container"):
+                    yield Static("Save file path:")
+                    yield Input(SAVE_DATA_PATH, id="save-file-input")
+                with Container(classes="config-text-inputs-container"):
                     yield Static("System Prompt:")
                     yield TextArea(id="system-prompt-input")
             with TabPane("Chat"):
                 yield ChatContainer()
         yield Footer(show_command_palette=False)
 
-    @on(Select.Changed, "#model-selector,#temp-selector,#top_p-selector")
+    @on(Select.Changed, "#model-selector,#temp-selector,#top_p-selector,#save-file-selector")
     def select_changed(self, event: Select.Changed) -> None:
         assert event.select.id is not None
         if event.select.id == "model-selector":
@@ -92,6 +104,10 @@ class ChatGUI(App):
             self.chat.temperature = event.value
         elif event.select.id == "top_p-selector":
             self.chat.top_p = event.value
+
+    @on(Input.Changed, "#save-file-input")
+    def input_changed(self, event: Input.Changed) -> None:
+        self.save_file = event.value
 
     @on(TextArea.Changed, "#system-prompt-input")
     def text_area_changed(self, event: TextArea.Changed) -> None:
@@ -122,6 +138,10 @@ class ChatGUI(App):
 
     def action_quit(self) -> None:
         self.exit()
+
+    def action_save(self) -> None:
+        with open(self.save_file, "w") as f:
+            f.write(json.dumps(self.chat.history) + "\n")
 
     def action_clear(self) -> None:
         chat_log = self.query_one("#chat-log-container")
@@ -157,6 +177,8 @@ class ChatGUI(App):
 
         # Chat response
         self.send_prompt(text, message)
+
+        self.action_save()
 
     @work(thread=True)
     def send_prompt(

@@ -135,9 +135,15 @@ TabPane {
     margin-left: 1;
 }
 
-.system-prompt-container > Static {
+.config-text-inputs-container {
+    height: auto;
+    padding: 1 0;
+}
+
+.config-text-inputs-container > Static {
     margin: 0 0;
     margin-left: 1;
+    height: auto;
 }
 
 Select {
@@ -151,6 +157,6 @@ Select {
     width: 32;
 }
 
-TabPane > TextArea {
-    height: 12;
+#system-prompt-input {
+    height: 10;
 }
