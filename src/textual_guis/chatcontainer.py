@@ -112,7 +112,8 @@ class Message(Container):
         yield QuietMarkdown(self.markdown, classes="message")
         with HorizontalScroll(classes="message-buttons"):
             yield Static(self.token_counts, classes="token-counts")
-            yield Static("[@click='app.copy()']copy[/]", classes="copy")
+            yield Static("[@click='app.goto()']goto[/]", classes="goto message-button")
+            yield Static("[@click='app.copy()']copy[/]", classes="copy message-button")
 
     def on_enter(self, event) -> None:
         for x in self.app.query(".message-container"):

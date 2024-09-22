@@ -50,6 +50,16 @@ def escape_text(markdown_text):
     return ''.join(parts)
 
 
+def extract_number(prefix, s):
+    pattern = f'^{re.escape(prefix)}-(\\d+)$'
+    match = re.match(pattern, s)
+    
+    if match:
+        return int(match.group(1))
+    else:
+        return None
+
+
 class ChatGUI(App):
     """Simple LLM chat GUI"""
 
@@ -70,6 +80,7 @@ class ChatGUI(App):
         self.chat = chat
         self.title = title
         self.save_file = save_file
+        self.n_user_messages = 0
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -130,6 +141,32 @@ class ChatGUI(App):
         process.communicate(msg.encode('utf-8'))
         asyncio.create_task(self.reset_text())
 
+    def action_goto(self) -> None:
+        msgs = self.query_one("#chat-log-container")
+        start_dropping = False
+        for msg in msgs.children:
+            if msg.has_class("hovered"):
+                nums = [extract_number("user-message", x) for x in msg.classes]
+                nums = [x for x in nums if x is not None]
+                new_hist_size = nums[0] if nums else None
+                start_dropping = True
+                text = msg.markdown.lstrip("**User**: ")
+                text_input = self.query_one("#text-input")
+                text_input.text = text
+                text_input.focus()
+                text_input.move_cursor(text_input.document.end)
+
+                new_hist = []
+                n_user_messages = 0
+                for chat_msg in self.chat.history:
+                    if n_user_messages <= new_hist_size:
+                        new_hist.append(chat_msg)
+                    if chat_msg["role"] == "user":
+                        n_user_messages += 1
+                self.chat.history = new_hist[:-1]
+            if start_dropping:
+                msg.remove()
+
     async def reset_text(self)   -> None:
         await asyncio.sleep(1)
         copy_button = self.query_one(".copied")
@@ -166,7 +203,11 @@ class ChatGUI(App):
         chat_log = self.query_one("#chat-log-container")
 
         # Render the user message
-        message = Message("**User**: " + text, classes="user-message")
+        message = Message(
+            "**User**: " + text, 
+            classes=f"user-message user-message-{self.n_user_messages}"
+        )
+        self.n_user_messages += 1
         chat_log.mount(message)
         message.anchor()
 

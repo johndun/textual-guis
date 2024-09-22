@@ -58,8 +58,9 @@ TabPane {
     background: $surface-lighten-1;
 }
 
-.assistant-message {
-
+.assistant-message .goto {
+    visibility: hidden;
+    width: 0;
 }
 
 .message-buttons {
@@ -77,8 +78,8 @@ TabPane {
     padding: 0 1;
 }
 
-.copy {
-    width: 10;
+.message-button {
+    width: 7;
     height: 1;
     text-align: right;
     link-color: transparent;
@@ -86,11 +87,7 @@ TabPane {
     padding-right: 1;
 }
 
-.message-container.hovered {
-/*    background: $surface-lighten-1;*/
-}
-
-.message-container.hovered > .message-buttons > .copy {
+.message-container.hovered > .message-buttons > .message-button {
     link-color: $text;
     link-color-hover: $text;
     link-background-hover: $surface-lighten-3;
