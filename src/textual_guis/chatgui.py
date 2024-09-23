@@ -86,22 +86,28 @@ class ChatGUI(App):
         yield Header()
         with TabbedContent():
             with TabPane("Config"):
-                with Container(classes="inputs-container"):
-                    with VerticalScroll():
-                        yield Static("Model")
-                        yield Select.from_values(MODELS, id="model-selector")
-                    with VerticalScroll():
-                        yield Static("Temp")
-                        yield Select.from_values(TEMPERATURES, id="temp-selector")
-                    with VerticalScroll():
-                        yield Static("Top-P")
-                        yield Select.from_values(TOP_P, id="top_p-selector")
-                with Container(classes="config-text-inputs-container"):
-                    yield Static("Save file path:")
-                    yield Input(SAVE_DATA_PATH, id="save-file-input")
-                with Container(classes="config-text-inputs-container"):
-                    yield Static("System Prompt:")
-                    yield TextArea(id="system-prompt-input")
+                with VerticalScroll():
+                    with Container(classes="inputs-container"):
+                        with Container():
+                            yield Static("Model")
+                            yield Select.from_values(MODELS, id="model-selector")
+                        with Container():
+                            yield Static("Temp")
+                            yield Select.from_values(TEMPERATURES, id="temp-selector")
+                        with Container():
+                            yield Static("Top-P")
+                            yield Select.from_values(TOP_P, id="top_p-selector")
+                    with Container(classes="config-text-inputs-container"):
+                        yield Static("Save file path:")
+                        yield Input(SAVE_DATA_PATH, id="save-file-input")
+                    with Container(classes="config-text-inputs-container"):
+                        yield Static("System Prompt:")
+                        yield TextArea.code_editor(
+                            self.chat.system_prompt,
+                            id="system-prompt-input",
+                            language="markdown",
+                            soft_wrap=True
+                        )
             with TabPane("Chat"):
                 yield ChatContainer()
         yield Footer(show_command_palette=False)
@@ -249,7 +255,7 @@ class ChatGUI(App):
 
 
 def launch_gui(
-    model: Annotated[str, Option(help="A litellm model identifier")] = "gpt-4o-mini", 
+    model: Annotated[str, Option(help="A litellm model identifier")] = "gpt-4o-mini",
     max_tokens: Annotated[int, Option(help="The maximum number of tokens to generate")] = 4096,
     top_p: Annotated[float, Option(help="The cumulative probability for top-p sampling")] = 1.0,
     temperature: Annotated[float, Option(help="The sampling temperature to use for generation")] = 0.0,

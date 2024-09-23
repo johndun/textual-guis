@@ -123,11 +123,11 @@ TabPane {
     layout: horizontal;
 }
 
-.inputs-container > VerticalScroll {
+.inputs-container > Container {
     width: auto;
 }
 
-.inputs-container > VerticalScroll > Static {
+.inputs-container > Container > Static {
     margin: 0 0;
     margin-left: 1;
 }
@@ -155,5 +155,5 @@ Select {
 }
 
 #system-prompt-input {
-    height: 10;
+    height: auto;
 }
