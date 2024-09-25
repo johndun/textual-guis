@@ -184,8 +184,12 @@ class ChatGUI(App):
         self.exit()
 
     def action_save(self) -> None:
+        output = {
+            "history": self.chat.history, 
+            "system_prompt": self.chat.system_prompt
+        }
         with open(self.save_file, "w") as f:
-            f.write(json.dumps(self.chat.history) + "\n")
+            f.write(json.dumps(output) + "\n")
 
     def action_clear(self) -> None:
         chat_log = self.query_one("#chat-log-container")
