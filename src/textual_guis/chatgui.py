@@ -186,7 +186,12 @@ class ChatGUI(App):
     def action_save(self) -> None:
         output = {
             "history": self.chat.history, 
-            "system_prompt": self.chat.system_prompt
+            "system_prompt": self.chat.system_prompt, 
+            "model": self.chat.model, 
+            "temperature": self.chat.temperature,
+            "top_p": self.chat.top_p,
+            "max_tokens": self.chat.max_tokens, 
+            "token_counts": self.chat.tokens.total
         }
         with open(self.save_file, "w") as f:
             f.write(json.dumps(output) + "\n")
