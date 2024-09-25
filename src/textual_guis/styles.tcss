@@ -159,5 +159,5 @@ Select {
 }
 
 #scratch-input {
-    height: 100%;
+    height: auto;
 }

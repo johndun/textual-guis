@@ -111,12 +111,13 @@ class ChatGUI(App):
             with TabPane("Chat"):
                 yield ChatContainer()
             with TabPane("Scratch"):
-                yield TextArea.code_editor(
-                    self.chat.system_prompt,
-                    id="scratch-input",
-                    language="markdown",
-                    soft_wrap=True
-                )
+                with VerticalScroll():
+                    yield TextArea.code_editor(
+                        self.chat.system_prompt,
+                        id="scratch-input",
+                        language="markdown",
+                        soft_wrap=True
+                    )
         yield Footer(show_command_palette=False)
 
     @on(Select.Changed, "#model-selector,#temp-selector,#top_p-selector,#save-file-selector")
