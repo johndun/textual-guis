@@ -6,7 +6,7 @@ import typer
 from typer import Option
 
 from textual_guis.llmchat import LlmChat, LlmPrompt
-from textual_guis.chatgui import ChatGUI
+from textual_guis.chatgui import ChatGUI, DEFAULT_SAVE_FILE
 
 
 
@@ -67,7 +67,8 @@ def launch_gui(
     max_tokens: Annotated[int, Option(help="The maximum number of tokens to generate")] = 4096,
     top_p: Annotated[float, Option(help="The cumulative probability for top-p sampling")] = 1.0,
     temperature: Annotated[float, Option(help="The sampling temperature to use for generation")] = 0.0,
-    stream: Annotated[bool, Option(help="If true, use streaming API mode")] = False
+    stream: Annotated[bool, Option(help="If true, use streaming API mode")] = False,
+    save_file: Annotated[str, Option(help="Path where json object containing the chat log will be saved")] = DEFAULT_SAVE_FILE
 ):
     """Launches a chat gui with a model backend."""
     def _execute_prompt(prompt_id: str, **kwargs):
@@ -84,7 +85,7 @@ def launch_gui(
         provide_xml_blocks_to_tools=True
     )
     chat.tools_map = {"execute_prompt": _execute_prompt}
-    app = ChatGUI(title=model, chat=chat)
+    app = ChatGUI(title=model, chat=chat, save_file=save_file)
     app.run()
 
 

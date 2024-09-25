@@ -29,7 +29,7 @@ MODELS = [
     "gpt-4o-mini", 
     "claude-3-5-sonnet-20240620"
 ]
-SAVE_DATA_PATH = "chatlog.json"
+DEFAULT_SAVE_FILE = "chatlog.json"
 
 
 def escape_text(markdown_text):
@@ -74,7 +74,7 @@ class ChatGUI(App):
             self, 
             chat: LlmChat, 
             title: str = "LLM Chat", 
-            save_file: str = SAVE_DATA_PATH
+            save_file: str = DEFAULT_SAVE_FILE
     ):
         super().__init__()
         self.chat = chat
@@ -99,7 +99,7 @@ class ChatGUI(App):
                             yield Select.from_values(TOP_P, id="top_p-selector")
                     with Container(classes="config-text-inputs-container"):
                         yield Static("Save file path:")
-                        yield Input(SAVE_DATA_PATH, id="save-file-input")
+                        yield Input(self.save_file, id="save-file-input")
                     with Container(classes="config-text-inputs-container"):
                         yield Static("System Prompt:")
                         yield TextArea.code_editor(
@@ -264,7 +264,8 @@ def launch_gui(
     max_tokens: Annotated[int, Option(help="The maximum number of tokens to generate")] = 4096,
     top_p: Annotated[float, Option(help="The cumulative probability for top-p sampling")] = 1.0,
     temperature: Annotated[float, Option(help="The sampling temperature to use for generation")] = 0.0,
-    stream: Annotated[bool, Option(help="If true, use streaming API mode")] = False
+    stream: Annotated[bool, Option(help="If true, use streaming API mode")] = False,
+    save_file: Annotated[str, Option(help="Path where json object containing the chat log will be saved")] = DEFAULT_SAVE_FILE
 ):
     """Launches a chat gui with a model backend."""
     chat = LlmChat(
@@ -274,7 +275,7 @@ def launch_gui(
         temperature=temperature, 
         stream=stream
     )
-    app = ChatGUI(title=model, chat=chat)
+    app = ChatGUI(title=model, chat=chat, save_file=save_file)
     app.run()
 
 
