@@ -157,3 +157,7 @@ Select {
 #system-prompt-input {
     height: auto;
 }
+
+#scratch-input {
+    height: 100%;
+}

@@ -110,6 +110,13 @@ class ChatGUI(App):
                         )
             with TabPane("Chat"):
                 yield ChatContainer()
+            with TabPane("Scratch"):
+                yield TextArea.code_editor(
+                    self.chat.system_prompt,
+                    id="scratch-input",
+                    language="markdown",
+                    soft_wrap=True
+                )
         yield Footer(show_command_palette=False)
 
     @on(Select.Changed, "#model-selector,#temp-selector,#top_p-selector,#save-file-selector")
@@ -191,7 +198,8 @@ class ChatGUI(App):
             "temperature": self.chat.temperature,
             "top_p": self.chat.top_p,
             "max_tokens": self.chat.max_tokens, 
-            "token_counts": self.chat.tokens.total
+            "token_counts": self.chat.tokens.total,
+            "scratch": self.query_one("#scratch-input").text
         }
         with open(self.save_file, "w") as f:
             f.write(json.dumps(output) + "\n")
