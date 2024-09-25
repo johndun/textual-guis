@@ -117,6 +117,7 @@ class ChatGUI(App):
         assert event.select.id is not None
         if event.select.id == "model-selector":
             self.chat.model = event.value
+            self.title = event.value
         elif event.select.id == "temp-selector":
             self.chat.temperature = event.value
         elif event.select.id == "top_p-selector":
