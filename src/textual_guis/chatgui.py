@@ -113,7 +113,6 @@ class ChatGUI(App):
             with TabPane("Scratch"):
                 with VerticalScroll():
                     yield TextArea.code_editor(
-                        self.chat.system_prompt,
                         id="scratch-input",
                         language="markdown",
                         soft_wrap=True
