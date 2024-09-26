@@ -56,6 +56,7 @@ class LlmChat:
     tools: List[Callable] = None  #: An optional list of tools as python functions (default: None)
     max_tool_calls: int = 6  #: The maximum number of sequential tool calls (default: 6)
     stream: bool = False  #: If true, use streaming API mode
+    stream_functions: bool = False  #: If this and `stream` are true, function responses are also streamed
     provide_xml_blocks_to_tools: bool = False  #: If true, XML blocks will as kwargs to function calls 
 
     def __post_init__(self):
@@ -87,7 +88,7 @@ class LlmChat:
     def get_tool_responses(self, tool_calls):
         response_text = ""
         for tool_call in tool_calls:
-            response_text += "\n\n```tool_call\n" + json.dumps(dict(tool_call.function), indent=2) + "\n```"
+            response_text += "\n\n#### Tool call:\n\n```tool_call\n" + json.dumps(dict(tool_call.function), indent=2) + "\n```"
             function_name = tool_call.function.name
             function_to_call = self.tools_map[function_name]
             function_args = json.loads(tool_call.function.arguments)
@@ -96,7 +97,7 @@ class LlmChat:
                     for xml_block in parse_text_for_tags(msg["content"]):
                         function_args[xml_block.tag] = xml_block.content
             function_response = function_to_call(**function_args) or ""
-            response_text += "\n\n```tool_response\n" + function_response + "\n```"
+            response_text += "\n\n#### Tool response:\n\n" + function_response
             self.history.append({
                 "tool_call_id": tool_call.id,
                 "role": "tool",
@@ -104,6 +105,31 @@ class LlmChat:
                 "content": function_response,
             })
         return response_text + "\n\n"
+
+    def get_tool_responses_stream(self, tool_calls):
+        response_text = ""
+        for tool_call in tool_calls:
+            response_text += "\n\n#### Tool call:\n\n```tool_call\n" + json.dumps(dict(tool_call.function), indent=2) + "\n```"
+            function_name = tool_call.function.name
+            function_to_call = self.tools_map[function_name]
+            function_args = json.loads(tool_call.function.arguments)
+            if self.provide_xml_blocks_to_tools:
+                for msg in self.history:
+                    for xml_block in parse_text_for_tags(msg["content"]):
+                        function_args[xml_block.tag] = xml_block.content
+            response_text += "\n\n#### Tool response:\n\n"
+            function_response = ""
+            for chunk in function_to_call(**function_args):
+                function_response += chunk
+                yield response_text + function_response
+            response_text += function_response + "\n\n"
+            yield response_text
+            self.history.append({
+                "tool_call_id": tool_call.id,
+                "role": "tool",
+                "name": function_name,
+                "content": function_response,
+            })
 
     def get_messages_for_completion(self, prompt: str, prefill: str) -> List[Dict]:
         assert not prefill or self.supports_assistant_prefill
@@ -169,8 +195,14 @@ class LlmChat:
 
         tool_calls = response.choices[0].message.tool_calls
         if tool_calls:
-            response_text += self.get_tool_responses(tool_calls)
-            yield response_text
+            if not self.stream_functions:
+                response_text += self.get_tool_responses(tool_calls)
+                yield response_text
+            else:
+                for chunk in self.get_tool_responses_stream(tool_calls):
+                    yield response_text + chunk
+                response_text += chunk
+            
             if tool_call_depth < self.max_tool_calls:
                 for chunk in self._call_stream(tool_call_depth=tool_call_depth + 1):
                     yield response_text + chunk

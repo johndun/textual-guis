@@ -36,7 +36,7 @@ Generate a summary in <summary> tags.
 </doc_summary_prompt>
 </example>
 
-Enclose each prompt in xml tags using an informative <prompt_id>. After generating a prompt, ask the user if they would like to execute it. If yes, use the `execute_prompt` tool. This will execute the prompt using the most recent data provided by the user.
+Enclose each prompt in unique xml tags (e.g., <doc_summary_prompt>). After generating a prompt, ask the user if they would like to execute it. If yes, use the `execute_prompt` tool. This will execute the prompt using the most recent data provided by the user.
 
 Prompt writing guidelines:
 
@@ -72,7 +72,7 @@ def launch_gui(
 ):
     """Launches a chat gui with a model backend."""
     def _execute_prompt(prompt_id: str, **kwargs):
-        return LlmPrompt(prompt=kwargs[prompt_id], model=model)(**kwargs)
+        return LlmPrompt(prompt=kwargs[prompt_id], model=model, stream=stream)(**kwargs)
 
     chat = LlmChat(
         system_prompt=SYSTEM_PROMPT, 
@@ -81,6 +81,7 @@ def launch_gui(
         top_p=top_p, 
         temperature=temperature, 
         stream=stream, 
+        stream_functions=False, 
         tools=[execute_prompt], 
         provide_xml_blocks_to_tools=True
     )
