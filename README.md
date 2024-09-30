@@ -46,7 +46,8 @@ python -m textual_guis.chatgui --help
 
 ## Notes
 
-How do we start the refactor (without API access)? We could implement a mock API.
+[x] Mock LLM chat class
+[x] Remove hard coded CSS classes in chatcontainer widgets.
 
 
 Completed: 

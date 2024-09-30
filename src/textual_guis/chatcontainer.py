@@ -4,31 +4,6 @@ from textual.widgets import TextArea, Static, Markdown, LoadingIndicator
 from textual.reactive import reactive
 
 
-class TextInput(TextArea):
-    """A text input widget"""
-    def __init__(
-            self, 
-            show_line_numbers: bool = False,
-            language: str = "markdown", 
-            id: str = "text-input", 
-            **kwargs
-    ):
-        super().__init__(
-            id=id, 
-            show_line_numbers=show_line_numbers,
-            language=language,
-            **kwargs
-        )
-
-    def on_mount(self) -> None:
-        self.focus()
-
-    def _on_key(self, event) -> None:
-        if event.key in("ctrl+r", "registered_sign") and self.text:
-            event.prevent_default()
-            self.app.action_update_display()
-
-
 class ChatContainer(Container):
     """A container that allows 2 vertically stacked items to be resized"""
     def __init__(self, id: str = "chat-container", **kwargs):
@@ -39,8 +14,8 @@ class ChatContainer(Container):
         with Container():
             yield VerticalScroll(id="chat-log-container")
             yield LoadingIndicator(id="loading")
-        yield Separator()
-        yield TextInput()
+        yield Separator(id="separator")
+        yield TextInput(id="text-input", show_line_numbers=True, language="markdown")
         with HorizontalScroll(id="buttons"):
             yield Static("[@click='app.update_display()']Submit[/]", classes="submit")
             yield Static("[@click='app.clear()']Clear[/]", classes="clear")
@@ -75,15 +50,19 @@ class ChatContainer(Container):
                 pass
 
 
+class TextInput(TextArea):
+    """A text input widget"""
+    def on_mount(self) -> None:
+        self.focus()
+
+    def _on_key(self, event) -> None:
+        if event.key in("ctrl+r", "registered_sign") and self.text:
+            event.prevent_default()
+            self.app.action_update_display()
+
+
 class Separator(Static):
     """A widget for separating and resizing panels in a container"""
-    def __init__(
-            self,
-            id: str = "separator",
-            **kwargs
-        ):
-        super().__init__(id=id, **kwargs)
-
     def on_enter(self) -> None:
         self.add_class("hovered")
 

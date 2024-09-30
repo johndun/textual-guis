@@ -120,8 +120,20 @@ class ChatGUI(App):
                     )
         yield Footer(show_command_palette=False)
 
+    def action_clear(self) -> None:
+        chat_log = self.query_one("#chat-log-container")
+        chat_log.remove_children()
+        self.chat.clear_history()
+        input_widget = self.query_one("#text-input")
+        input_widget.text = ""
+        input_widget.focus()
+
+    def action_quit(self) -> None:
+        self.exit()
+
     @on(Select.Changed, "#model-selector,#temp-selector,#top_p-selector,#save-file-selector")
     def select_changed(self, event: Select.Changed) -> None:
+        """Respond to selection change events"""
         assert event.select.id is not None
         if event.select.id == "model-selector":
             self.chat.model = event.value
@@ -133,15 +145,18 @@ class ChatGUI(App):
 
     @on(Input.Changed, "#save-file-input")
     def input_changed(self, event: Input.Changed) -> None:
+        """Respond to input change events"""
         self.save_file = event.value
 
     @on(TextArea.Changed, "#system-prompt-input")
     def text_area_changed(self, event: TextArea.Changed) -> None:
+        """Response to text area change events"""
         assert event.text_area.id is not None
         if event.text_area.id == "system-prompt-input":
             self.chat.system_prompt = event.text_area.text
 
     def action_copy(self) -> None:
+        """Copy buttons"""
         copy_button = self.query_one(".message-container.hovered > .message-buttons > .copy")
         copy_button.update("copied")
         copy_button.add_class("copied")
@@ -156,7 +171,14 @@ class ChatGUI(App):
         process.communicate(msg.encode('utf-8'))
         asyncio.create_task(self.reset_text())
 
+    async def reset_text(self)   -> None:
+        await asyncio.sleep(1)
+        copy_button = self.query_one(".copied")
+        copy_button.update("[@click='app.copy()']copy[/]")
+        copy_button.remove_class("copied")
+
     def action_goto(self) -> None:
+        """Edit messages button"""
         msgs = self.query_one("#chat-log-container")
         start_dropping = False
         for msg in msgs.children:
@@ -182,15 +204,6 @@ class ChatGUI(App):
             if start_dropping:
                 msg.remove()
 
-    async def reset_text(self)   -> None:
-        await asyncio.sleep(1)
-        copy_button = self.query_one(".copied")
-        copy_button.update("[@click='app.copy()']copy[/]")
-        copy_button.remove_class("copied")
-
-    def action_quit(self) -> None:
-        self.exit()
-
     def action_save(self) -> None:
         output = {
             "history": self.chat.history, 
@@ -204,14 +217,6 @@ class ChatGUI(App):
         }
         with open(self.save_file, "w") as f:
             f.write(json.dumps(output) + "\n")
-
-    def action_clear(self) -> None:
-        chat_log = self.query_one("#chat-log-container")
-        chat_log.remove_children()
-        self.chat.clear_history()
-        input_widget = self.query_one("#text-input")
-        input_widget.text = ""
-        input_widget.focus()
 
     def action_update_display(self) -> None:
         """Called when Ctrl+R is pressed."""
