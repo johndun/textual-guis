@@ -48,6 +48,9 @@ python -m textual_guis.chatgui --help
 
 [x] Mock LLM chat class
 [x] Remove hard coded CSS classes in chatcontainer widgets.
+[/] When a chat message is added, parse for XML tags.
+    [x] Initialize an `objects` parameter in the app class.
+    [x] When the user enters a chat message, parse the text and add any XML blocked content to self.objects
 
 
 Completed: 

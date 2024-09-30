@@ -18,6 +18,7 @@ import typer
 from typer import Option
 from typing_extensions import Annotated
 
+from textual_guis.utils import parse_text_for_tags
 from textual_guis.llmchat import LlmChat, MockLlmChat
 from textual_guis.chatcontainer import ChatContainer, Message
 
@@ -81,6 +82,7 @@ class ChatGUI(App):
         self.title = title
         self.save_file = save_file
         self.n_user_messages = 0
+        self.objects = {}
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -221,11 +223,12 @@ class ChatGUI(App):
     def action_update_display(self) -> None:
         """Called when Ctrl+R is pressed."""
         input_widget = self.query_one("#text-input")
+        for content in parse_text_for_tags(input_widget.text):
+            self.objects[content.tag] = content.content
         input_text = escape_text(input_widget.text)
-        if input_text:
-            input_widget.text = ""
-            self.query_one("#loading").display = True
-            self.run_worker(self.update_display(input_text))
+        input_widget.text = ""
+        self.query_one("#loading").display = True
+        self.run_worker(self.update_display(input_text))
         input_widget.focus()
 
     async def update_display(self, text: str) -> None:
