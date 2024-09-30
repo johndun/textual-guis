@@ -46,6 +46,7 @@ python -m textual_guis.chatgui --help
 
 ## Notes
 
+How do we start the refactor (without API access)? We could implement a mock API.
 
 
 Completed: 

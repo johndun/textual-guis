@@ -18,7 +18,7 @@ import typer
 from typer import Option
 from typing_extensions import Annotated
 
-from textual_guis.llmchat import LlmChat
+from textual_guis.llmchat import LlmChat, MockLlmChat
 from textual_guis.chatcontainer import ChatContainer, Message
 
 
@@ -273,6 +273,8 @@ class ChatGUI(App):
         self.call_from_thread(token_count_container.update, self.chat.tokens.last)
 
 
+
+
 def launch_gui(
     model: Annotated[str, Option(help="A litellm model identifier")] = "gpt-4o-mini",
     max_tokens: Annotated[int, Option(help="The maximum number of tokens to generate")] = 4096,
@@ -282,13 +284,16 @@ def launch_gui(
     save_file: Annotated[str, Option(help="Path where json object containing the chat log will be saved")] = DEFAULT_SAVE_FILE
 ):
     """Launches a chat gui with a model backend."""
-    chat = LlmChat(
-        model=model, 
-        max_tokens=max_tokens, 
-        top_p=top_p, 
-        temperature=temperature, 
-        stream=stream
-    )
+    if model == "mock":
+        chat = MockLlmChat()
+    else:
+        chat = LlmChat(
+            model=model, 
+            max_tokens=max_tokens, 
+            top_p=top_p, 
+            temperature=temperature, 
+            stream=stream
+        )
     app = ChatGUI(title=model, chat=chat, save_file=save_file)
     app.run()
 
