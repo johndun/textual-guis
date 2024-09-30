@@ -220,11 +220,14 @@ class ChatGUI(App):
         with open(self.save_file, "w") as f:
             f.write(json.dumps(output) + "\n")
 
+    def update_objects(self, text: str) -> None:
+        for content in parse_text_for_tags(text):
+            self.objects[content.tag] = content.content
+
     def action_update_display(self) -> None:
         """Called when Ctrl+R is pressed."""
         input_widget = self.query_one("#text-input")
-        for content in parse_text_for_tags(input_widget.text):
-            self.objects[content.tag] = content.content
+        self.update_objects(input_widget.text)
         input_text = escape_text(input_widget.text)
         input_widget.text = ""
         self.query_one("#loading").display = True
@@ -266,18 +269,19 @@ class ChatGUI(App):
 
         if self.chat.stream:
             for idx, chunk in enumerate(self.chat(prompt=prompt)):
-                chunk = escape_text(chunk)
+                escaped_chunk = escape_text(chunk)
                 if idx % 10 == 0:
-                    self.call_from_thread(message_container.update, chunk)
+                    self.call_from_thread(message_container.update, escaped_chunk)
                     self.call_from_thread(chat_log.scroll_end)
-            self.call_from_thread(message_container.update, chunk)
-            self.call_from_thread(chat_log.scroll_end)
             response_text = chunk
+            escaped_response = escape_text(response_text)
         else:
-            response_text = escape_text(self.chat(prompt=prompt))
-            self.call_from_thread(message_container.update, response_text)
+            response_text = self.chat(prompt=prompt)
+            escaped_response = escape_text(response_text)
+            self.call_from_thread(message_container.update, escaped_response)
         self.query_one("#loading").display = False
-        self.call_from_thread(message.set_markdown, response_text)
+        self.call_from_thread(message.set_markdown, escaped_response)
+        self.call_from_thread(self.update_objects, response_text)
         self.call_from_thread(token_count_container.update, self.chat.tokens.last)
 
 

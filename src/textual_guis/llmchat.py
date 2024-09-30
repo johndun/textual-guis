@@ -236,8 +236,10 @@ class LlmPrompt(LlmChat):
 @dataclass
 class MockLlmChat(LlmChat):
     """A mock chat class for testing"""
+    response: str = "Hello world"
+
     def __call__(self, prefill="", **kwargs) -> str:
-        return "Hello world"
+        return self.response
 
 
 def batch_inference(
