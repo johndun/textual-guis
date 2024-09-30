@@ -120,6 +120,8 @@ class ChatGUI(App):
                         language="markdown",
                         soft_wrap=True
                     )
+            with TabPane("Objects"):
+                yield VerticalScroll(id="objects-container")
         yield Footer(show_command_palette=False)
 
     def action_clear(self) -> None:
@@ -215,14 +217,22 @@ class ChatGUI(App):
             "top_p": self.chat.top_p,
             "max_tokens": self.chat.max_tokens, 
             "token_counts": self.chat.tokens.total,
-            "scratch": self.query_one("#scratch-input").text
+            "scratch": self.query_one("#scratch-input").text, 
+            "objects": self.objects
         }
         with open(self.save_file, "w") as f:
             f.write(json.dumps(output) + "\n")
 
     def update_objects(self, text: str) -> None:
-        for content in parse_text_for_tags(text):
+        new_content = parse_text_for_tags(text)
+        if not new_content:
+            return
+        for content in new_content:
             self.objects[content.tag] = content.content
+        objects_container = self.query_one("#objects-container")
+        objects_container.remove_children()
+        for tag in self.objects.keys():
+            objects_container.mount(Static(tag))
 
     def action_update_display(self) -> None:
         """Called when Ctrl+R is pressed."""
@@ -285,8 +295,6 @@ class ChatGUI(App):
         self.call_from_thread(token_count_container.update, self.chat.tokens.last)
 
 
-
-
 def launch_gui(
     model: Annotated[str, Option(help="A litellm model identifier")] = "gpt-4o-mini",
     max_tokens: Annotated[int, Option(help="The maximum number of tokens to generate")] = 4096,
@@ -297,7 +305,7 @@ def launch_gui(
 ):
     """Launches a chat gui with a model backend."""
     if model == "mock":
-        chat = MockLlmChat()
+        chat = MockLlmChat(response="<bot_greeting>Hello world</bot_greeting>")
     else:
         chat = LlmChat(
             model=model, 

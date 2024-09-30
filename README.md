@@ -52,7 +52,10 @@ python -m textual_guis.chatgui --help
     [x] Initialize an `objects` parameter in the app class.
     [x] When the user enters a chat message, parse the text and add any XML blocked content to self.objects
     [x] When the bot enters a chat message, parse the text and add any XML blocked content to self.objects
-
+[x] Create a tab container for the XML tagged objects
+    [x] Update #objects-container each time app.objects changes.
+[x] Save the objects attribute to the chatlog
+[ ] Update #objects-container to be a multi-select list
 
 Completed: 
 
