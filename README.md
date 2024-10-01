@@ -46,6 +46,14 @@ python -m textual_guis.chatgui --help
 
 ## Notes
 
+[ ] Set defaults for the model hyperparam inputs to the right default values. They are currently blank.
+[/] Add functionality for the agent to write simple python functions (along with prompts)
+    - Need a way to access the LLM-defined function given just the function name. Will this require that the function name and the xml tag are the same? I think so.
+[ ] Need to define outputs of the whole chain. How?
+    - One option might be to have a 2nd select list. The first for nodes, the last for selecting the outputs. This might be easiest for now.
+
+Completed: 
+
 [x] Mock LLM chat class
 [x] Remove hard coded CSS classes in chatcontainer widgets.
 [x] When a chat message is added, parse for XML tags.
@@ -55,10 +63,8 @@ python -m textual_guis.chatgui --help
 [x] Create a tab container for the XML tagged objects
     [x] Update #objects-container each time app.objects changes.
 [x] Save the objects attribute to the chatlog
-[ ] Update #objects-container to be a multi-select list
-
-Completed: 
-
+[x] Update #objects-container to be a multi-select list
+[x] Save selected list to chatlog
 - Streaming interface: https://gist.github.com/willmcgugan/648a537c9d47dafa59cb8ece281d8c2c
 - Clear button to delete the chat history
 - Token counts: I want to be able to see the token counts for each message

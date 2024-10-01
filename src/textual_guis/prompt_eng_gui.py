@@ -86,7 +86,7 @@ def launch_gui(
         provide_xml_blocks_to_tools=True
     )
     chat.tools_map = {"execute_prompt": _execute_prompt}
-    app = ChatGUI(title=model, chat=chat, save_file=save_file)
+    app = ChatGUI(title="Prompt Chain Assistant", chat=chat, save_file=save_file)
     app.run()
 
 

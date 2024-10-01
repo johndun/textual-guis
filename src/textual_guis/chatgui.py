@@ -7,7 +7,8 @@ from textual.app import App, ComposeResult
 from textual.containers import VerticalScroll, Container, HorizontalScroll, ScrollableContainer
 from textual.widgets import (
     Static, Header, Footer, Markdown, 
-    TabbedContent, TabPane, Select, TextArea, Input
+    TabbedContent, TabPane, Select, TextArea, Input, 
+    SelectionList
 )
 from textual.binding import Binding
 from textual import work, on
@@ -31,6 +32,12 @@ MODELS = [
     "claude-3-5-sonnet-20240620"
 ]
 DEFAULT_SAVE_FILE = "chatlog.json"
+
+
+def extract_variables(text):
+    pattern = r'\{\{(\w+)\}\}'
+    matches = re.findall(pattern, text)
+    return matches
 
 
 def escape_text(markdown_text):
@@ -121,7 +128,7 @@ class ChatGUI(App):
                         soft_wrap=True
                     )
             with TabPane("Objects"):
-                yield VerticalScroll(id="objects-container")
+                yield SelectionList(id="objects-container")
         yield Footer(show_command_palette=False)
 
     def action_clear(self) -> None:
@@ -218,7 +225,8 @@ class ChatGUI(App):
             "max_tokens": self.chat.max_tokens, 
             "token_counts": self.chat.tokens.total,
             "scratch": self.query_one("#scratch-input").text, 
-            "objects": self.objects
+            "objects": self.objects, 
+            "selected": self.query_one("#objects-container").selected
         }
         with open(self.save_file, "w") as f:
             f.write(json.dumps(output) + "\n")
@@ -230,9 +238,13 @@ class ChatGUI(App):
         for content in new_content:
             self.objects[content.tag] = content.content
         objects_container = self.query_one("#objects-container")
-        objects_container.remove_children()
-        for tag in self.objects.keys():
-            objects_container.mount(Static(tag))
+        objects_container.clear_options()
+        for idx, (tag, content) in enumerate(self.objects.items()):
+            inputs = extract_variables(content)
+            if inputs:
+                objects_container.add_option((tag + "(" + ", ".join(inputs) + ")", idx, True))
+            else:
+                objects_container.add_option((tag, idx, True))
 
     def action_update_display(self) -> None:
         """Called when Ctrl+R is pressed."""
@@ -314,7 +326,7 @@ def launch_gui(
             temperature=temperature, 
             stream=stream
         )
-    app = ChatGUI(title=model, chat=chat, save_file=save_file)
+    app = ChatGUI(chat=chat, save_file=save_file)
     app.run()
 
 

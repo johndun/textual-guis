@@ -1,0 +1,1 @@
+{"history": [], "system_prompt": "", "model": "gpt-4o-mini", "temperature": 0.0, "top_p": 1.0, "max_tokens": 4096, "token_counts": "in: 0, out: 0", "scratch": "", "objects": {"greeting": "Hello", "prompt_test": "\nThis is a basic prompt\n\n{{input}}\n", "prompt_test2": "\nThis is a basic prompt\n\n{{input1}}\n\n{{input2}}\n", "bot_greeting": "Hello world"}, "selected": [1, 2]}
