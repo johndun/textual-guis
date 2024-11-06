@@ -1,5 +1,5 @@
 import json
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from typing import Dict, List, Callable, Union, Generator
 
 from datasets import Dataset
@@ -7,7 +7,7 @@ from datasets import Dataset
 from litellm import completion, ModelResponse, get_model_info, stream_chunk_builder
 from litellm.utils import function_to_dict
 
-from textual_guis.utils import Template, parse_text_for_tags
+from textual_guis.utils import Template
 
 
 @dataclass
@@ -48,7 +48,7 @@ class LlmChat:
     print(chat.tokens.total)
     ```
     """
-    model: str = "gpt-4o-mini"  #: A litellm model identifier: https://docs.litellm.ai/docs/providers
+    model: str = "bedrock/us.anthropic.claude-3-5-sonnet-20241022-v2:0"  #: A litellm model identifier: https://docs.litellm.ai/docs/providers
     system_prompt: str = ""  #: A system prompt (default: )
     max_tokens: int = 4096  #: The maximum number of tokens to generate (default: 4,096)
     top_p: float = 1.0  #: The cumulative probability for top-p sampling (default: 1.)
@@ -56,8 +56,6 @@ class LlmChat:
     tools: List[Callable] = None  #: An optional list of tools as python functions (default: None)
     max_tool_calls: int = 6  #: The maximum number of sequential tool calls (default: 6)
     stream: bool = False  #: If true, use streaming API mode
-    stream_functions: bool = False  #: If this and `stream` are true, function responses are also streamed
-    provide_xml_blocks_to_tools: bool = False  #: If true, XML blocks will as kwargs to function calls 
 
     def __post_init__(self):
         self.history = []
@@ -81,21 +79,28 @@ class LlmChat:
                 for schema, function in zip(self.tool_schemas, self.tools)
             }
 
+    @property
+    def model_args(self):
+        return {
+            "model": self.model,
+            "max_tokens": self.max_tokens,
+            "top_p": self.top_p,
+            "temperature": self.temperature
+        }
+
     def clear_history(self):
         """Clears and re initializes the history"""
         self.history = []
+        if self.system_prompt:
+            self.history.append({"role": "system", "content": self.system_prompt})
 
     def get_tool_responses(self, tool_calls):
         response_text = ""
         for tool_call in tool_calls:
-            response_text += "\n\n#### Tool call:\n\n```tool_call\n" + json.dumps(dict(tool_call.function), indent=2) + "\n```"
+            response_text += "\n\n#### Tool call:\n\n" + json.dumps(dict(tool_call.function), indent=2)
             function_name = tool_call.function.name
             function_to_call = self.tools_map[function_name]
             function_args = json.loads(tool_call.function.arguments)
-            if self.provide_xml_blocks_to_tools:
-                for msg in self.history:
-                    for xml_block in parse_text_for_tags(msg["content"]):
-                        function_args[xml_block.tag] = xml_block.content
             function_response = function_to_call(**function_args) or ""
             response_text += "\n\n#### Tool response:\n\n" + function_response
             self.history.append({
@@ -106,32 +111,7 @@ class LlmChat:
             })
         return response_text + "\n\n"
 
-    def get_tool_responses_stream(self, tool_calls):
-        response_text = ""
-        for tool_call in tool_calls:
-            response_text += "\n\n#### Tool call:\n\n```tool_call\n" + json.dumps(dict(tool_call.function), indent=2) + "\n```"
-            function_name = tool_call.function.name
-            function_to_call = self.tools_map[function_name]
-            function_args = json.loads(tool_call.function.arguments)
-            if self.provide_xml_blocks_to_tools:
-                for msg in self.history:
-                    for xml_block in parse_text_for_tags(msg["content"]):
-                        function_args[xml_block.tag] = xml_block.content
-            response_text += "\n\n#### Tool response:\n\n"
-            function_response = ""
-            for chunk in function_to_call(**function_args):
-                function_response += chunk
-                yield response_text + function_response
-            response_text += function_response + "\n\n"
-            yield response_text
-            self.history.append({
-                "tool_call_id": tool_call.id,
-                "role": "tool",
-                "name": function_name,
-                "content": function_response,
-            })
-
-    def get_messages_for_completion(self, prompt: str, prefill: str) -> List[Dict]:
+    def _call(self, prompt: str = "", prefill: str = "", tool_call_depth: int = 0) -> ModelResponse:
         assert not prefill or self.supports_assistant_prefill
         if prompt:
             self.history.append({"role": "user", "content": prompt})
@@ -140,12 +120,6 @@ class LlmChat:
             if not prefill else
             self.history + [{"role": "assistant", "content": prefill}]
         )
-        if self.system_prompt:
-            messages = [{"role": "system", "content": self.system_prompt}] + messages
-        return messages
-
-    def _call(self, prompt: str = "", prefill: str = "", tool_call_depth: int = 0) -> ModelResponse:
-        messages = self.get_messages_for_completion(prompt, prefill)
         completion_args = {"tools": self.tool_schemas} if self.tool_schemas else {}
         response = completion(
             model=self.model,
@@ -169,7 +143,14 @@ class LlmChat:
         return response_text
 
     def _call_stream(self, prompt: str = "", prefill: str = "", tool_call_depth: int = 0) -> ModelResponse:
-        messages = self.get_messages_for_completion(prompt, prefill)
+        assert not prefill or self.supports_assistant_prefill
+        if prompt:
+            self.history.append({"role": "user", "content": prompt})
+        messages = (
+            self.history
+            if not prefill else
+            self.history + [{"role": "assistant", "content": prefill}]
+        )
         completion_args = {"tools": self.tool_schemas} if self.tool_schemas else {}
         response = completion(
             model=self.model,
@@ -195,14 +176,8 @@ class LlmChat:
 
         tool_calls = response.choices[0].message.tool_calls
         if tool_calls:
-            if not self.stream_functions:
-                response_text += self.get_tool_responses(tool_calls)
-                yield response_text
-            else:
-                for chunk in self.get_tool_responses_stream(tool_calls):
-                    yield response_text + chunk
-                response_text += chunk
-            
+            response_text += self.get_tool_responses(tool_calls)
+            yield response_text
             if tool_call_depth < self.max_tool_calls:
                 for chunk in self._call_stream(tool_call_depth=tool_call_depth + 1):
                     yield response_text + chunk
@@ -221,10 +196,14 @@ class LlmPrompt(LlmChat):
     ### Usage
 
     ```
-    chat = LlmPrompt(system_prompt="Talk like a pirate")
-    print(chat(prompt="Hello"))
-    print(chat(prompt="How are you"))
+    chat = LlmPrompt(
+        system_prompt="Talk like a pirate",
+        prompt="Write a haiku, enclosed in <haiku> tags about {{topic}}"
+    )
+    print(chat(topic="pencils"))
+    print(chat(topic="giraffes"))
     print(chat.tokens.total)
+    print(*chat.history, sep="\n")
     ```
     """
     prompt: str = "{{prompt}}"  #: A string template with keys marked by double curly braces.
@@ -251,8 +230,6 @@ def batch_inference(
         system_prompt="Talk like a pirate",
         prompt="Write a haiku, enclosed in <haiku> tags about {{topic}}",
         dataset=dataset,
-        client="bedrock",
-        model="sonnet",
         num_proc=4
     )
     print(dataset[0])
