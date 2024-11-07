@@ -61,6 +61,7 @@ class Field:
             type: str,
             value: Union[int, float, str] = None,
             label: str = None,
+            use_cot: bool = False,
             **kwargs
     ):
         if type == "max_chars":
@@ -91,7 +92,11 @@ class Field:
                 inputs_header="You will be provided a set of inputs, along with an evaluation criteria that one of the inputs is expected to satisfy.",
                 task="Your task is to determine if the input meets the requirement.",
                 inputs=self.inputs + [Field(self.name, self.description)] + [requirement],
-                outputs=[evaluation_result, reason],
+                outputs=(
+                    [cot, evaluation_result, reason]
+                    if use_cot else
+                    [evaluation_result, reason]
+                ),
                 **kwargs
             )
             return LlmEvaluation(generator=evaluator, field=field, requirement=value)
@@ -125,9 +130,9 @@ class LlmModule(LlmChat):
         super().__post_init__()
         if self.footer is None:
             if len(self.outputs) > 2:
-                inline = ", ".join([x.xml for x in self.outputs])
+                inline = ", ".join([f"{x.xml}...{x.xml_close}" for x in self.outputs])
             elif len(self.outputs) == 2:
-                inline = " and ".join([x.xml for x in self.outputs])
+                inline = " and ".join([f"{x.xml}...{x.xml_close}" for x in self.outputs])
             else:
                 inline = self.outputs[0].xml
             self.footer = f"Generate the required output{'s' if len(self.outputs) > 1 else ''} within XML tags: {inline}"
@@ -223,3 +228,38 @@ class Revisor:
                 outputs[f"{field.name}_evaluation_results"] = ""
                 break
         return outputs
+
+
+def initialize_single_output_genrevise(task: str, output: Field, details: str = "", max_revisions: int = 6):
+    chain_of_thought = Field("thinking", "Begin by thinking step by step")
+    generate = LlmModule(
+        task=task,
+        inputs=output.inputs,
+        details=details,
+        outputs=[chain_of_thought, output],
+        temperature=0.1
+    )
+    revise = LlmModule(
+        inputs_header="You will be provided a set of inputs, along with a non-passing evaluation result.",
+        task="Your task is to generate an updated version of the field indicated in the evaluation result so that it meets all evaluation criteria and requirements.",
+        details=details,
+        inputs=output.inputs + [output, Field("evaluation_result", "An evaluation result")],
+        outputs=[chain_of_thought, output],
+        footer=f"Generate the required <thinking> and updated {output.xml} outputs within XML tags.",
+        temperature=0.3
+    )
+    evaluate_and_revise = Revisor(revisor=revise, max_revisions=max_revisions)
+    return generate, evaluate_and_revise
+
+
+def run_single_output_chain(sample, generate, evaluate_and_revise):
+    output = generate.outputs[-1]
+
+    # Generate an initial response
+    response = generate(**sample)
+    sample[output.name] = response[output.name]
+
+    # Evaluate and revise
+    sample = sample | evaluate_and_revise(**sample)
+
+    return sample

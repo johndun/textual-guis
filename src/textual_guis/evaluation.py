@@ -105,7 +105,7 @@ class NoBlockedTerms(Evaluation):
         matches = []
         blocked_terms = self.blocked_terms.copy() if self.blocked_terms else []
         if self.blocked_terms_field is not None and self.blocked_terms_field in inputs:
-            blocked_terms += inputs[self.blocked_terms_field]
+            blocked_terms += inputs[self.blocked_terms_field] or []
         for term in blocked_terms:
             if len(term.split()) == 1 and term.lower() in words:
                 matches.append(term)
