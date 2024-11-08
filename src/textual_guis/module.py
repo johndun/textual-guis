@@ -1,6 +1,7 @@
 import json
 from dataclasses import dataclass, field, asdict
 from typing import List, Union, Dict
+from functools import partial
 
 from textual_guis.llmchat import LlmChat
 from textual_guis.evaluation import (
@@ -99,7 +100,7 @@ class Field:
                 ),
                 **kwargs
             )
-            return LlmEvaluation(generator=evaluator, field=field, requirement=value)
+            return LlmEvaluation(generator=evaluator, field=field, requirement=label or value)
         raise NotImplementedError
 
 
@@ -140,11 +141,10 @@ class LlmModule(LlmChat):
     @property
     def prompt(self) -> str:
         """Returns a prompt for generating the output"""
-        prompt = [
-            "# Task Description",
-            self.inputs_header
-        ]
-        prompt.append("\n".join([f"- {x.definition}" for x in self.inputs]))
+        prompt = ["# Task Description"]
+        if self.inputs:
+            prompt.append(self.inputs_header)
+            prompt.append("\n".join([f"- {x.definition}" for x in self.inputs]))
         if self.task:
             prompt.append(self.task)
         prompt.append("Generate the following outputs within XML tags:")
@@ -152,13 +152,14 @@ class LlmModule(LlmChat):
             prompt.append(f"{x.xml}\n{x.description}\n{x.xml_close}")
         for x in self.outputs:
             if x.evaluations:
-                prompt.append(f"Requirements for {x.markdown}")
+                prompt.append(f"Requirements for {x.markdown}:")
                 prompt.append("\n".join([f"- {evl.requirement}" for evl in x.evaluations]))
         if self.details:
             prompt.append(self.details)
-        prompt.append("# Inputs")
-        for x in self.inputs:
-            prompt.append(x.input_template)
+        if self.inputs:
+            prompt.append("# Inputs")
+            for x in self.inputs:
+                prompt.append(x.input_template)
         if self.footer:
             prompt.append(self.footer)
         return "\n\n".join(prompt)
@@ -220,7 +221,7 @@ class Revisor:
 
             if revision_idx < self.max_revisions and evaluation_results:
                 eval_results_str = json.dumps(asdict(evaluation_results[0]), indent=2)
-                print(f"revision {revision_idx}: \"{outputs[field.name]}\" {evaluation_results[0].reason}")
+                print(f"revision {revision_idx}: {evaluation_results[0].reason}")
                 revised = self.revisor(**(inputs | outputs), evaluation_result=eval_results_str)
                 if revised[field.name].strip():
                     outputs[field.name] = revised[field.name].strip()
@@ -230,14 +231,50 @@ class Revisor:
         return outputs
 
 
-def initialize_single_output_genrevise(task: str, output: Field, details: str = "", max_revisions: int = 6):
+def run_single_output_chain(sample, generate: LlmModule, evaluate_and_revise: Revisor = None):
+    output = generate.outputs[-1]
+
+    # Generate an initial response
+    sample = generate(**sample)
+
+    # Evaluate and revise
+    if evaluate_and_revise is not None:
+        sample = sample | evaluate_and_revise(**sample)
+
+    return sample
+
+
+def initialize_single_output_gen(task: str, output: Dict, details: str = "", **kwargs):
+    output = Field(**output)
     chain_of_thought = Field("thinking", "Begin by thinking step by step")
     generate = LlmModule(
         task=task,
         inputs=output.inputs,
         details=details,
         outputs=[chain_of_thought, output],
-        temperature=0.1
+        **kwargs
+    )
+    return (
+        partial(run_single_output_chain, generate=generate), 
+        generate
+    )
+
+
+def initialize_single_output_genrevise(
+        task: str, 
+        output: Dict, 
+        details: str = "", 
+        max_revisions: int = 6, 
+        **kwargs
+):
+    output = Field(**output)
+    chain_of_thought = Field("thinking", "Begin by thinking step by step")
+    generate = LlmModule(
+        task=task,
+        inputs=output.inputs,
+        details=details,
+        outputs=[chain_of_thought, output],
+        **kwargs
     )
     revise = LlmModule(
         inputs_header="You will be provided a set of inputs, along with a non-passing evaluation result.",
@@ -246,20 +283,15 @@ def initialize_single_output_genrevise(task: str, output: Field, details: str = 
         inputs=output.inputs + [output, Field("evaluation_result", "An evaluation result")],
         outputs=[chain_of_thought, output],
         footer=f"Generate the required <thinking> and updated {output.xml} outputs within XML tags.",
-        temperature=0.3
+        **kwargs
     )
     evaluate_and_revise = Revisor(revisor=revise, max_revisions=max_revisions)
-    return generate, evaluate_and_revise
-
-
-def run_single_output_chain(sample, generate, evaluate_and_revise):
-    output = generate.outputs[-1]
-
-    # Generate an initial response
-    response = generate(**sample)
-    sample[output.name] = response[output.name]
-
-    # Evaluate and revise
-    sample = sample | evaluate_and_revise(**sample)
-
-    return sample
+    return (
+        partial(
+            run_single_output_chain, 
+            generate=generate, 
+            evaluate_and_revise=evaluate_and_revise
+        ), 
+        generate, 
+        evaluate_and_revise
+    )

@@ -2,6 +2,7 @@ import asyncio
 import subprocess
 import json
 import re
+import os
 
 from textual.app import App, ComposeResult
 from textual.containers import VerticalScroll, Container, HorizontalScroll, ScrollableContainer
@@ -27,9 +28,10 @@ TOP_P = [0.5, 0.9, 0.99, 1.0]
 MODELS = [
     "gpt-4o", 
     "gpt-4o-mini", 
-    "claude-3-5-sonnet-20240620"
+    "claude-3-5-sonnet-20240620",
+    "claude-3-5-sonnet-20241022"
 ]
-DEFAULT_SAVE_FILE = "chatlog.json"
+DEFAULT_SAVE_FILE = "~/chatlog.json"
 
 
 def escape_text(markdown_text):
@@ -288,7 +290,7 @@ def launch_gui(
         temperature=temperature, 
         stream=stream
     )
-    app = ChatGUI(title=model, chat=chat, save_file=save_file)
+    app = ChatGUI(title=model, chat=chat, save_file=os.path.expanduser(save_file))
     app.run()
 
 

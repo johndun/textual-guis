@@ -48,7 +48,7 @@ class LlmChat:
     print(chat.tokens.total)
     ```
     """
-    model: str = "bedrock/us.anthropic.claude-3-5-sonnet-20241022-v2:0"  #: A litellm model identifier: https://docs.litellm.ai/docs/providers
+    model: str = "claude-3-5-sonnet-20241022"  #: A litellm model identifier: https://docs.litellm.ai/docs/providers
     system_prompt: str = ""  #: A system prompt (default: )
     max_tokens: int = 4096  #: The maximum number of tokens to generate (default: 4,096)
     top_p: float = 1.0  #: The cumulative probability for top-p sampling (default: 1.)
